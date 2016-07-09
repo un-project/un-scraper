@@ -23,8 +23,8 @@ casper.then(function() {
   if (casper.cli.has('meeting-end'))
     meetingEnd = casper.cli.get('meeting-end');
 
-  for (var i = sessionBegin; i < sessionEnd; i++) {
-    for (var j = meetingBegin; j < meetingEnd; j++) {
+  for (var i = sessionBegin; i <= sessionEnd; i++) {
+    for (var j = meetingBegin; j <= meetingEnd; j++) {
       (function(url, sessionId) {
         casper.thenOpen(url, function() {
           this.echo('casper.async: ' + url);
