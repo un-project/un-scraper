@@ -9,4 +9,6 @@ npm install
 
 ## Usage
 
+```
 PATH=$PATH:./node_modules/phantomjs/bin/ node_modules/casperjs/bin/casperjs un_scraper.js [options]
+```
