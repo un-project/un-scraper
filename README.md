@@ -14,10 +14,15 @@ $ npm install -g casperjs phantomjs
 
   Options:
 
-    --type        Specify the type of document. Possible values are ``pv`` and
-                  ``res``. The default value is ``pv``.
-    --session-id  The session identifier. The default value is 1.
-    --doc-id      The document identifier. The default value is 1.
+    --type        Specify the type of document. Possible values are ``pv``
+                  (Procès-verbal), and ``res`` (Resolution). The default value
+                  is ``pv``.
+    --lang        Specify the language. Possible values are ``A`` (Arabic),
+                  ``C`` (Mandarin Chinese), ``E`` (English), ``F`` (French),
+                  ``R`` (Russian), and ``S`` (Spanish). The default value is
+                  ``E``.
+    --session-id  Specify the session identifier. The default value is 1.
+    --doc-id      Specify the document identifier. The default value is 1.
 
   Any other options are passed to casperjs (see `casperjs --help`)
 

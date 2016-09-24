@@ -11,8 +11,9 @@ casper.start();
 casper.then(function() {
   var sessionId = 1;
   var docId = 1;
-  var sep1;
-  var sep2;
+  var sep1 = '/';
+  var sep2 = '/PV.';
+  var lang = 'E';
   var urlPrefix = 'http://www.un.org/en/ga/search/view_doc.asp?symbol=A';
 
   casper.cli.drop("cli");
@@ -22,14 +23,15 @@ casper.then(function() {
     this.echo("No arg nor option passed").exit();
   }
 
+  if (casper.cli.has('lang')) {
+    lang = casper.cli.get('lang');
+  }
+
   if (casper.cli.has('type') && casper.cli.get('type') !== 'pv') {
     if (casper.cli.get('type') === 'res') {
       sep1 = '/RES/';
       sep2 = '/';
     }
-  } else {
-    sep1 = '/';
-    sep2 = '/PV.';
   }
 
   if (casper.cli.has('session-id'))
@@ -67,7 +69,7 @@ casper.then(function() {
         });
       })(this, this.getCurrentUrl(), sessionId);
     });
-  })(urlPrefix + sep1 + sessionId + sep2 + docId, sessionId);
+  })(urlPrefix + sep1 + sessionId + sep2 + docId + '&Lang=' + lang, sessionId);
 });
 
 casper.run(function() {
