@@ -18,7 +18,7 @@ npm install -g casperjs phantomjs
     --session-id  The session identifier. The default value is 1.
     --doc-id      The document identifier. The default value is 1.
 
-  Any other options are passed to casperj (see `casperjs --help`)
+  Any other options are passed to casperjs (see `casperjs --help`)
 
   Examples:
 
