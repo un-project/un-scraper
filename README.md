@@ -30,3 +30,4 @@ $ npm install -g casperjs phantomjs
 
     $ casperjs un-scraper.js --type=res --session-id=48 --doc-id=20
     $ casperjs un-scraper.js --type=pv --session-id=68 --doc-id=192
+    $ casperjs un-scraper.js --type=pv --lang=F --session-id=68 --doc-id=192
