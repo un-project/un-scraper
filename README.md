@@ -2,9 +2,10 @@
 
 ## Install
 
-```
 git clone or download the code
-npm install -g casperjs phantomjs
+
+```
+$ npm install -g casperjs phantomjs
 ```
 
 ## Usage
@@ -22,5 +23,5 @@ npm install -g casperjs phantomjs
 
   Examples:
 
-    $ casperjs un-scraper.js --type=res --session-id 48 --doc-id 20
-    $ casperjs un-scraper.js --type=pv --session-id 68 --doc-id 192
+    $ casperjs un-scraper.js --type=res --session-id=48 --doc-id=20
+    $ casperjs un-scraper.js --type=pv --session-id=68 --doc-id=192
