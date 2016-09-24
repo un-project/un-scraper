@@ -2,20 +2,23 @@
   "name": "un-scraper",
   "version": "1.0.0",
   "description": "scrape general assembly records",
-  "main": "un_scraper.js",
+  "main": "./un-scraper.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/un-project/un-scraper.git"
+    "url": "git+http://github.com/un-project/un-scraper.git"
   },
   "author": "Olivier Crave",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/un-project/un-scraper/issues"
+  "licenses": {
+    "type": "MIT",
+    "url": "http://github.com/un-project/un-scraper/blob/master/LICENSE"
   },
-  "homepage": "https://github.com/un-project/un-scraper#readme",
+  "bugs": {
+    "url": "http://github.com/un-project/un-scraper/issues"
+  },
+  "homepage": "http://github.com/un-project/un-scraper#readme",
   "dependencies": {
     "casperjs": "^1.1.2",
     "phantomjs": "^2.1.7"
