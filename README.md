@@ -1,33 +1,96 @@
-# un-scraper - a scrapping tool to download documents from the United Nations Website
+# un-scraper
 
-## Install
+A modern web scraper for downloading documents from the United Nations Website. Built with Puppeteer for reliable, efficient scraping.
 
-git clone or download the code
+## Features
 
-```
-$ npm install -g casperjs phantomjs
+- 🚀 Modern async/await implementation with error handling
+- 🔄 Automatic retry logic for failed downloads
+- 🌍 Support for 6 languages (Arabic, Chinese, English, French, Russian, Spanish)
+- 📄 Downloads both Procès-verbal (PV) and Resolution (RES) documents
+- 📊 Clear status logging and progress reporting
+- ✨ Uses Puppeteer (maintained, modern browser automation)
+
+## Requirements
+
+- Node.js 18.0.0 or higher
+- npm or yarn
+
+## Installation
+
+```bash
+git clone https://github.com/un-project/un-scraper.git
+cd un-scraper
+npm install
 ```
 
 ## Usage
 
-  Usage: casperjs un-scraper.js [options]
+```bash
+node un-scraper.js [options]
+```
 
-  Options:
+### Options
 
-    --type        Specify the type of document. Possible values are 'pv'
-                  (Procès-verbal), and 'res' (Resolution). The default value
-                  is 'pv'.
-    --lang        Specify the language. Possible values are 'A' (Arabic),
-                  'C' (Mandarin Chinese), 'E' (English), 'F' (French),
-                  'R' (Russian), and 'S' (Spanish). The default value is
-                  'E'.
-    --session-id  Specify the session identifier. The default value is 1.
-    --doc-id      Specify the document identifier. The default value is 1.
+- `--body` - UN body: `ga` (General Assembly) or `sc` (Security Council). Default: `ga`
+- `--type` - Document type: `pv` (Procès-verbal) or `res` (Resolution). Default: `pv`
+- `--lang` - Language code: `ar` (Arabic), `zh` (Chinese), `en` (English), `fr` (French), `ru` (Russian), `es` (Spanish). Default: `en`
+- `--session-id` - Session/Year identifier. Default: `1`
+- `--doc-id` - Document identifier. Default: `1`
+- `--help` - Show help message
 
-  Any other options are passed to casperjs (see `casperjs --help`)
+### Examples
 
-  Examples:
+```bash
+# General Assembly (default)
+node un-scraper.js --type=res --session-id=48 --doc-id=20
+node un-scraper.js --type=pv --lang=fr --session-id=68 --doc-id=70
+node un-scraper.js --type=res --lang=es --session-id=48 --doc-id=20
+node un-scraper.js --session-id=48 --doc-id=15
 
-    $ casperjs un-scraper.js --type=res --session-id=48 --doc-id=20
-    $ casperjs un-scraper.js --type=pv --session-id=68 --doc-id=192
-    $ casperjs un-scraper.js --type=pv --lang=F --session-id=68 --doc-id=192
+# Security Council
+node un-scraper.js --body=sc --type=res --session-id=2016 --doc-id=2314
+node un-scraper.js --body=sc --type=pv --doc-id=7851
+node un-scraper.js --body=sc --type=pv --lang=fr --doc-id=7851
+```
+
+## Output
+
+Downloaded documents are organized by language, UN body, session ID, and document type in a nested directory structure:
+```
+English (en):
+  ./en/ga/48/res/document_20.pdf      # GA Resolution 48/20
+  ./en/ga/68/pv/document_70.pdf       # GA Procès-verbal 68/70
+  ./en/ga/48/pv/document_15.pdf       # GA Procès-verbal 48/15
+  ./en/sc/2016/res/document_2314.pdf  # SC Resolution 2314(2016)
+  ./en/sc/1/pv/document_7851.pdf      # SC Procès-verbal 7851
+
+French (fr):
+  ./fr/ga/68/pv/document_70.pdf       # GA Procès-verbal 68/70
+  ./fr/sc/1/pv/document_7851.pdf      # SC Procès-verbal 7851
+
+Spanish (es):
+  ./es/ga/48/res/document_20.pdf      # GA Resolution 48/20
+```
+
+## What's New (v2.0.0)
+
+- ✅ Migrated from CasperJS/PhantomJS to Puppeteer
+- ✅ Refactored with async/await (no more callback hell)
+- ✅ Added comprehensive error handling and retry logic
+- ✅ Improved logging and user feedback
+- ✅ Input validation for all parameters
+- ✅ Modern Node.js module system (ESM)
+- ✅ Better code organization with configuration constants
+
+## Development
+
+To enable debug logging, set the DEBUG environment variable:
+
+```bash
+DEBUG=1 node un-scraper.js --session-id=1 --doc-id=1
+```
+
+## License
+
+MIT
