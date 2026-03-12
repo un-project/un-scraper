@@ -5,6 +5,20 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// GA sessions 1–30 used Roman numeral notation in resolution URLs (e.g. A/RES/103(I))
+const GA_ROMAN_SESSION_CUTOFF = 30;
+
+// Convert an integer to a Roman numeral string
+function toRoman(n) {
+  const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+  const syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
+  let result = '';
+  for (let i = 0; i < vals.length; i++) {
+    while (n >= vals[i]) { result += syms[i]; n -= vals[i]; }
+  }
+  return result;
+}
+
 // Configuration
 const CONFIG = {
   bodies: {
@@ -88,7 +102,9 @@ function validateArgs(args) {
     process.exit(1);
   }
   
-  if (isNaN(sessionId) || sessionId < 1) {
+  // sessionId=0 is the sentinel for legacy GA PV (A/PV.1–2444, pre-1976)
+  const minSessionId = (body === 'ga' && type === 'pv') ? 0 : 1;
+  if (isNaN(sessionId) || sessionId < minSessionId) {
     log.error(`Invalid session-id: ${sessionId}`);
     process.exit(1);
   }
@@ -103,6 +119,17 @@ function validateArgs(args) {
 
 // Build URL
 function buildUrl(body, type, sessionId, docId, lang) {
+  // Legacy GA PV: globally-numbered plenary meetings before 1976 (A/PV.1–2444)
+  // Signalled by sessionId=0; uses undocs.org and carries no language prefix.
+  if (body === 'ga' && type === 'pv' && sessionId === 0) {
+    return `https://undocs.org/A/PV.${docId}`;
+  }
+
+  // Legacy GA resolution: sessions I–XXX used Roman numeral notation (A/RES/103(I))
+  if (body === 'ga' && type === 'res' && sessionId <= GA_ROMAN_SESSION_CUTOFF) {
+    return `https://docs.un.org/${lang}/A/RES/${docId}(${toRoman(sessionId)})`;
+  }
+
   const bodyConfig = CONFIG.bodies[body];
   const docConfig = bodyConfig.documentTypes[type];
   const baseUrl = `https://docs.un.org/${lang}`;
@@ -261,14 +288,22 @@ Options:
   --lang        Language: ar (Arabic), zh (Chinese), en (English), fr (French),
                 ru (Russian), es (Spanish). Default: en
   --session-id  Session identifier. Default: 1
+                GA PV: use 0 for legacy globally-numbered meetings (A/PV.1–2444,
+                pre-1976). Use 1+ for per-session numbering (session 31 onwards).
+                GA RES: sessions 1–30 automatically use Roman numeral URLs
+                (e.g. A/RES/103(I)); sessions 31+ use the standard format.
   --doc-id      Document identifier. Default: 1
   --help        Show this message
 
 Examples:
-  # General Assembly (default)
+  # General Assembly — modern format
   node un-scraper.js --type=res --session-id=48 --doc-id=20
   node un-scraper.js --type=pv --lang=fr --session-id=68 --doc-id=70
-  
+
+  # General Assembly — legacy formats
+  node un-scraper.js --type=res --session-id=1 --doc-id=103   # → A/RES/103(I)
+  node un-scraper.js --type=pv  --session-id=0 --doc-id=49   # → undocs.org/A/PV.49
+
   # Security Council
   node un-scraper.js --body=sc --type=res --session-id=2016 --doc-id=2314
   node un-scraper.js --body=sc --type=pv --doc-id=7851
