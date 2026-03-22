@@ -6,10 +6,11 @@
  * and Security Council using un-scraper.js.
  *
  * Usage:
- *   node fetch-all.js [--lang=en] [--body=ga|sc|all] [--type=pv|res|all]
+ *   node fetch-all.js [--lang=en,fr] [--body=ga|sc|all] [--type=pv|res|all]
  *
  * Options:
- *   --lang   Language code (default: en). See un-scraper.js --help for codes.
+ *   --lang   Comma-separated language codes, or 'all' (default: en).
+ *            Codes: ar, zh, en, fr, ru, es
  *   --body   Limit to ga or sc (default: all)
  *   --type   Limit to pv or res (default: all)
  *   --dry-run  Print what would be downloaded without running the scraper
@@ -24,6 +25,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
+const ALL_LANGS = ['ar', 'zh', 'en', 'fr', 'ru', 'es'];
+
 const GA_LAST_SESSION  = 79;   // update as new sessions begin
 const GA_MAX_RES_DOC   = 400;  // max resolution doc number to try per session
 
@@ -36,8 +39,8 @@ const GA_NEW_PV_FIRST_SESSION  = 31;
 const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
 
 // SC PV meetings are numbered globally (not per year).
-const SC_PV_FIRST_DOC  = 1;
-const SC_PV_LAST_DOC   = 10000;
+const SC_PV_FIRST_DOC  = 1000;
+const SC_PV_LAST_DOC   = 3000;
 
 /**
  * Approximate year→[firstRes, lastRes] ranges for SC resolutions.
@@ -45,7 +48,7 @@ const SC_PV_LAST_DOC   = 10000;
  * The upper bound of each year is the lower bound of the next minus 1.
  */
 const SC_RES_YEAR_RANGES = {
-  1946: [1,   15],
+  /*1946: [1,   15],
   1947: [16,  25],
   1948: [26,  35],
   1949: [36,  43],
@@ -106,7 +109,7 @@ const SC_RES_YEAR_RANGES = {
   2004: [1527, 1590],
   2005: [1591, 1660],
   2006: [1661, 1729],
-  2007: [1730, 1790],
+  2007: [1730, 1790],*/
   2008: [1791, 1853],
   2009: [1854, 1906],
   2010: [1907, 1975],
@@ -132,9 +135,12 @@ const CONSECUTIVE_FAIL_LIMIT = 5;
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 
 function parseArgs() {
-  const args = { lang: 'en', body: 'all', type: 'all', dryRun: false };
+  const args = { langs: ['en'], body: 'all', type: 'all', dryRun: false };
   for (const arg of process.argv.slice(2)) {
-    if (arg.startsWith('--lang='))   args.lang   = arg.split('=')[1];
+    if (arg.startsWith('--lang=')) {
+      const val = arg.split('=')[1];
+      args.langs = val === 'all' ? ALL_LANGS : val.split(',');
+    }
     if (arg.startsWith('--body='))   args.body   = arg.split('=')[1];
     if (arg.startsWith('--type='))   args.type   = arg.split('=')[1];
     if (arg === '--dry-run')         args.dryRun = true;
@@ -145,7 +151,8 @@ fetch-all.js — Batch downloader for UN PV and Resolutions
 Usage: node fetch-all.js [options]
 
 Options:
-  --lang=CODE   Language code: ar, zh, en, fr, ru, es (default: en)
+  --lang=CODE   Comma-separated language codes, or 'all' (default: en)
+                Codes: ar, zh, en, fr, ru, es
   --body=BODY   Limit to 'ga', 'sc', or 'all' (default: all)
   --type=TYPE   Limit to 'pv', 'res', or 'all' (default: all)
   --dry-run     Print planned downloads without running the scraper
@@ -281,10 +288,10 @@ async function fetchSCRes(lang, dryRun) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { lang, body, type, dryRun } = parseArgs();
+  const { langs, body, type, dryRun } = parseArgs();
 
   console.log(`fetch-all.js — UN document batch downloader`);
-  console.log(`Language : ${lang}`);
+  console.log(`Languages: ${langs.join(', ')}`);
   console.log(`Body     : ${body}`);
   console.log(`Type     : ${type}`);
   if (dryRun) console.log(`Mode     : DRY RUN`);
@@ -294,11 +301,14 @@ async function main() {
   const doPV = type === 'all' || type === 'pv';
   const doRes = type === 'all' || type === 'res';
 
-  if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun);
-  if (doGA && doPV)  await fetchGA('pv',  lang, dryRun);
-  if (doGA && doRes) await fetchGA('res', lang, dryRun);
-  if (doSC && doPV)  await fetchSCPV(lang, dryRun);
-  if (doSC && doRes) await fetchSCRes(lang, dryRun);
+  for (const lang of langs) {
+    if (langs.length > 1) console.log(`\n${'═'.repeat(60)}\nLanguage: ${lang}\n${'═'.repeat(60)}`);
+    if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun);
+    if (doGA && doPV)  await fetchGA('pv',  lang, dryRun);
+    if (doGA && doRes) await fetchGA('res', lang, dryRun);
+    if (doSC && doPV)  await fetchSCPV(lang, dryRun);
+    if (doSC && doRes) await fetchSCRes(lang, dryRun);
+  }
 
   console.log('\nAll done.');
 }

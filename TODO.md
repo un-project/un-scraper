@@ -47,18 +47,10 @@ Potential improvements for this repository.
 
 - [ ] **`--from-session` / `--to-session` flags** for `fetch-all.js** — let users target
   a sub-range without editing the source constants.
-- [ ] **Multiple languages in one run** — currently `--lang` accepts only one code;
+- [x] **Multiple languages in one run** — currently `--lang` accepts only one code;
   accepting a comma-separated list (or `--lang=all`) would simplify bulk multilingual
   downloads.
 - [ ] **Output format options** — some users may want a flat directory or a different
   naming convention; make the output path template configurable.
 - [ ] **ECONC / HRC bodies** — the UN has other bodies (Economic and Social Council,
   Human Rights Council, etc.) whose documents follow similar URL patterns.
-
-## Documentation
-
-- [x] **README gaps** — the README does not mention `fetch-all.js` at all. Add a section
-  explaining batch downloading.
-- [x] **CHANGELOG** — `CHANGELOG.md` exists but is empty (or not shown); keep it updated.
-- [x] **`node_modules` in repo** — `node_modules` appears to be committed (or at least
-  not `.gitignore`d). Add it to `.gitignore` and rely on `npm install`.

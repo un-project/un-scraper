@@ -65,7 +65,7 @@ node fetch-all.js [options]
 
 ### Options
 
-- `--lang=CODE` — language code (default: `en`)
+- `--lang=CODE` — comma-separated language codes, or `all` (default: `en`). Codes: `ar`, `zh`, `en`, `fr`, `ru`, `es`
 - `--body=BODY` — limit to `ga`, `sc`, or `all` (default: `all`)
 - `--type=TYPE` — limit to `pv`, `res`, or `all` (default: `all`)
 - `--dry-run` — print what would be downloaded without actually running the scraper
@@ -76,8 +76,11 @@ node fetch-all.js [options]
 # Download all English documents for both bodies
 node fetch-all.js
 
-# Download only General Assembly resolutions in French
-node fetch-all.js --body=ga --type=res --lang=fr
+# Download General Assembly resolutions in French and Spanish
+node fetch-all.js --body=ga --type=res --lang=fr,es
+
+# Download all documents in all six UN languages
+node fetch-all.js --lang=all
 
 # Preview what a Security Council PV run would fetch
 node fetch-all.js --body=sc --type=pv --dry-run
