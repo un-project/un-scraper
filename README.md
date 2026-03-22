@@ -68,6 +68,8 @@ node fetch-all.js [options]
 - `--lang=CODE` — comma-separated language codes, or `all` (default: `en`). Codes: `ar`, `zh`, `en`, `fr`, `ru`, `es`
 - `--body=BODY` — limit to `ga`, `sc`, or `all` (default: `all`)
 - `--type=TYPE` — limit to `pv`, `res`, or `all` (default: `all`)
+- `--from-session=N` — start of the range (GA: session number; SC RES: year; SC PV: meeting number). Defaults to the built-in floor.
+- `--to-session=N` — end of the range, inclusive. Defaults to the built-in ceiling.
 - `--dry-run` — print what would be downloaded without actually running the scraper
 
 ### Examples
@@ -81,6 +83,9 @@ node fetch-all.js --body=ga --type=res --lang=fr,es
 
 # Download all documents in all six UN languages
 node fetch-all.js --lang=all
+
+# Download only GA sessions 70–79
+node fetch-all.js --body=ga --from-session=70 --to-session=79
 
 # Preview what a Security Council PV run would fetch
 node fetch-all.js --body=sc --type=pv --dry-run

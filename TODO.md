@@ -45,7 +45,7 @@ Potential improvements for this repository.
 
 ## Features
 
-- [ ] **`--from-session` / `--to-session` flags** for `fetch-all.js** — let users target
+- [x] **`--from-session` / `--to-session` flags** for `fetch-all.js** — let users target
   a sub-range without editing the source constants.
 - [x] **Multiple languages in one run** — currently `--lang` accepts only one code;
   accepting a comma-separated list (or `--lang=all`) would simplify bulk multilingual
