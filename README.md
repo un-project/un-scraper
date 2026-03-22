@@ -54,6 +54,38 @@ node un-scraper.js --body=sc --type=pv --doc-id=7851
 node un-scraper.js --body=sc --type=pv --lang=fr --doc-id=7851
 ```
 
+## Batch downloading
+
+`fetch-all.js` wraps `un-scraper.js` to download large swaths of the UN document
+archive in one go.
+
+```bash
+node fetch-all.js [options]
+```
+
+### Options
+
+- `--lang=CODE` — language code (default: `en`)
+- `--body=BODY` — limit to `ga`, `sc`, or `all` (default: `all`)
+- `--type=TYPE` — limit to `pv`, `res`, or `all` (default: `all`)
+- `--dry-run` — print what would be downloaded without actually running the scraper
+
+### Examples
+
+```bash
+# Download all English documents for both bodies
+node fetch-all.js
+
+# Download only General Assembly resolutions in French
+node fetch-all.js --body=ga --type=res --lang=fr
+
+# Preview what a Security Council PV run would fetch
+node fetch-all.js --body=sc --type=pv --dry-run
+```
+
+The script skips documents that have already been downloaded (by checking the output
+directory), so it is safe to interrupt and resume.
+
 ## Output
 
 Downloaded documents are organized by language, UN body, session ID, and document type in a nested directory structure:
