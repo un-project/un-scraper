@@ -59,6 +59,6 @@ Potential improvements for this repository.
 
 - [x] **README gaps** — the README does not mention `fetch-all.js` at all. Add a section
   explaining batch downloading.
-- [ ] **CHANGELOG** — `CHANGELOG.md` exists but is empty (or not shown); keep it updated.
+- [x] **CHANGELOG** — `CHANGELOG.md` exists but is empty (or not shown); keep it updated.
 - [ ] **`node_modules` in repo** — `node_modules` appears to be committed (or at least
   not `.gitignore`d). Add it to `.gitignore` and rely on `npm install`.

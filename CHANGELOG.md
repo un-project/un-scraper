@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `TODO.md` tracking potential improvements to the repository
+- `fetch-all.js` batch downloader documentation section in README
+- `fetch-all.js`: batch downloader for GA and SC documents (PV and resolutions)
+- Support for legacy GA PV globally-numbered meetings (A/PV.1–2444, pre-1976) via `--session-id=0`
+- Support for GA resolution Roman-numeral URLs (sessions 1–30, e.g. `A/RES/103(I)`)
+
 ## [2.0.0] - 2026-03-05
 
 ### Changed
