@@ -15,9 +15,9 @@ Potential improvements for this repository.
 
 ## Reliability
 
-- [ ] **SC PV upper bound** — `SC_PV_LAST_DOC` is hard-coded to 3000; SC meetings are now
+- [x] **SC PV upper bound** — `SC_PV_LAST_DOC` is hard-coded to 3000; SC meetings are now
   well past that number. Either raise the cap or derive it dynamically.
-- [ ] **SC RES year ranges** — the 2024 upper bound is marked "extend if needed" and years
+- [x] **SC RES year ranges** — the 2024 upper bound is marked "extend if needed" and years
   before 2008 are commented out. Restore or auto-detect the full range.
 - [ ] **GA session cap** — `GA_LAST_SESSION` must be updated manually each year.
   Consider deriving the current session from the current date automatically.

@@ -26,7 +26,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { downloadDocument, BROWSER_LAUNCH_OPTS } from './un-scraper.js';
+import { downloadDocument, downloadUrl, BROWSER_LAUNCH_OPTS } from './un-scraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -45,96 +45,10 @@ const GA_LEGACY_PV_LAST_DOC    = 2444;
 const GA_NEW_PV_FIRST_SESSION  = 31;
 const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
 
-// SC PV meetings are numbered globally (not per year).
-const SC_PV_FIRST_DOC  = 1;
-const SC_PV_LAST_DOC   = 10000;
-
-/**
- * Approximate year→[firstRes, lastRes] ranges for SC resolutions.
- * Resolution numbers are globally sequential starting from 1 in 1946.
- * The upper bound of each year is the lower bound of the next minus 1.
- */
-const SC_RES_YEAR_RANGES = {
-  1946: [1,   15],
-  1947: [16,  25],
-  1948: [26,  35],
-  1949: [36,  43],
-  1950: [44,  56],
-  1951: [57,  61],
-  1952: [62,  65],
-  1953: [66,  76],
-  1954: [77,  88],
-  1955: [89,  99],
-  1956: [100, 113],
-  1957: [114, 122],
-  1958: [123, 132],
-  1959: [133, 141],
-  1960: [142, 157],
-  1961: [158, 175],
-  1962: [176, 192],
-  1963: [193, 200],
-  1964: [201, 208],
-  1965: [209, 222],
-  1966: [223, 233],
-  1967: [234, 248],
-  1968: [249, 259],
-  1969: [260, 274],
-  1970: [275, 287],
-  1971: [288, 306],
-  1972: [307, 325],
-  1973: [326, 344],
-  1974: [345, 363],
-  1975: [364, 384],
-  1976: [385, 409],
-  1977: [410, 438],
-  1978: [439, 460],
-  1979: [461, 476],
-  1980: [477, 498],
-  1981: [499, 515],
-  1982: [516, 526],
-  1983: [527, 543],
-  1984: [544, 557],
-  1985: [558, 578],
-  1986: [579, 601],
-  1987: [602, 621],
-  1988: [622, 641],
-  1989: [642, 658],
-  1990: [659, 678],
-  1991: [679, 716],
-  1992: [717, 790],
-  1993: [791, 893],
-  1994: [894, 970],
-  1995: [971, 1037],
-  1996: [1038, 1097],
-  1997: [1098, 1144],
-  1998: [1145, 1204],
-  1999: [1205, 1285],
-  2000: [1286, 1341],
-  2001: [1342, 1384],
-  2002: [1385, 1462],
-  2003: [1463, 1526],
-  2004: [1527, 1590],
-  2005: [1591, 1660],
-  2006: [1661, 1729],
-  2007: [1730, 1790],
-  2008: [1791, 1853],
-  2009: [1854, 1906],
-  2010: [1907, 1975],
-  2011: [1976, 2041],
-  2012: [2042, 2119],
-  2013: [2120, 2188],
-  2014: [2189, 2249],
-  2015: [2250, 2337],
-  2016: [2338, 2397],
-  2017: [2398, 2452],
-  2018: [2453, 2513],
-  2019: [2514, 2573],
-  2020: [2574, 2626],
-  2021: [2627, 2689],
-  2022: [2690, 2733],
-  2023: [2734, 2769],
-  2024: [2770, 2840],  // extend if needed
-};
+// SC: listing API served by the Dag Hammarskjöld Library.
+// Covers 2000–present; returns all PV records and resolutions per calendar year.
+const SC_FIRST_YEAR   = 2000;
+const SC_LISTING_BASE = 'https://ydsftksff8.execute-api.us-east-1.amazonaws.com/dev/render_meeting';
 
 // Stop after this many consecutive failures within a session/range.
 const CONSECUTIVE_FAIL_LIMIT = 5;
@@ -168,7 +82,7 @@ Options:
   --body=BODY          Limit to 'ga', 'sc', or 'all' (default: all)
   --type=TYPE          Limit to 'pv', 'res', or 'all' (default: all)
   --from-session=N     Start of the range (default: built-in floor)
-                       GA: session number; SC RES: year; SC PV: meeting number
+                       GA: session number; SC: calendar year (2000–present)
   --to-session=N       End of the range, inclusive (default: built-in ceiling)
   --concurrency=N      Parallel scraper processes (default: 3)
   --delay=MS           Minimum milliseconds between successive requests (default: 0)
@@ -320,27 +234,100 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency, browser, delay
   }
 }
 
-async function fetchSCPV(lang, dryRun, from, to, concurrency, browser, delay) {
-  const startDoc = from ?? SC_PV_FIRST_DOC;
-  const endDoc   = to   ?? SC_PV_LAST_DOC;
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`Security Council — Procès-verbaux (meetings ${startDoc}–${endDoc})`);
-  console.log('─'.repeat(60));
-  // SC PV uses sessionId=1 and a globally incrementing docId.
-  await fetchDocRange('sc', 'pv', lang, 1, startDoc, endDoc, dryRun, concurrency, browser, delay);
+// ─── SC listing helpers ───────────────────────────────────────────────────────
+
+// Fetch the DHL meeting table for one SC year; return all S/PV and S/RES entries.
+async function fetchScListing(year) {
+  const res = await fetch(`${SC_LISTING_BASE}/scmeetings_${year}/EN`);
+  if (!res.ok) return [];
+  const html = await res.text();
+
+  const docs = new Map(); // symbol → rawUrl (deduplicate)
+  const re = /href="(https?:\/\/(?:(?:www\.)?undocs\.org|docs\.un\.org)[^"]*)"[^>]*>\s*(S\/(?:PV|RES)\S*(?:\s*\([^)]+\))?)\s*<\/a>/g;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const symbol = m[2].trim();
+    if (!docs.has(symbol)) docs.set(symbol, m[1].trim());
+  }
+  return [...docs.entries()].map(([symbol, rawUrl]) => ({ symbol, rawUrl }));
 }
 
-async function fetchSCRes(lang, dryRun, from, to, concurrency, browser, delay) {
+// Parse an SC symbol into { type, sessionId, docId }.  Returns null for unknown types.
+function parseScSymbol(symbol) {
+  // S/PV.10146  or  S/PV.10146 (Resumption 1)
+  const pv = symbol.match(/^S\/PV\.(\d+)(.*)?$/);
+  if (pv) {
+    const suffix = (pv[2] || '').trim();
+    return { type: 'pv', sessionId: 1, docId: suffix ? `${pv[1]}${suffix}` : parseInt(pv[1]) };
+  }
+  // S/RES/2811(2025)
+  const res = symbol.match(/^S\/RES\/(\d+)\((\d+)\)$/);
+  if (res) return { type: 'res', sessionId: parseInt(res[2]), docId: parseInt(res[1]) };
+  return null;
+}
+
+// Insert a language code into a docs.un.org or undocs.org URL.
+function addLangToUrl(rawUrl, lang) {
+  if (/^https?:\/\/docs\.un\.org\/[a-z]{2}\//.test(rawUrl)) return rawUrl;
+  if (rawUrl.startsWith('https://docs.un.org/'))
+    return rawUrl.replace('https://docs.un.org/', `https://docs.un.org/${lang}/`);
+  // (www.)undocs.org/en/… → undocs.org/{lang}/…
+  return rawUrl.replace(/^(https?:\/\/(?:www\.)?undocs\.org)\/[a-z]{2}\//, `$1/${lang}/`);
+}
+
+// ─── SC download routine ──────────────────────────────────────────────────────
+
+async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay) {
+  const doPV  = type === 'all' || type === 'pv';
+  const doRes = type === 'all' || type === 'res';
+  const firstYear = from ?? SC_FIRST_YEAR;
+  const lastYear  = to   ?? new Date().getFullYear();
+
   console.log(`\n${'─'.repeat(60)}`);
-  console.log(`Security Council — Resolutions`);
+  console.log(`Security Council — PV & Resolutions (${firstYear}–${lastYear})`);
   console.log('─'.repeat(60));
 
-  for (const [yearStr, [firstDoc, lastDoc]] of Object.entries(SC_RES_YEAR_RANGES)) {
-    const year = parseInt(yearStr);
-    if (from !== null && year < from) continue;
-    if (to   !== null && year > to)   continue;
-    console.log(`\n[SC RES] Year ${year} (docs ${firstDoc}–${lastDoc})`);
-    await fetchDocRange('sc', 'res', lang, year, firstDoc, lastDoc, dryRun, concurrency, browser, delay);
+  for (let year = firstYear; year <= lastYear; year++) {
+    const listing = await fetchScListing(year);
+    const work = listing.filter(({ symbol }) =>
+      (doPV  && symbol.startsWith('S/PV.'))  ||
+      (doRes && symbol.startsWith('S/RES/'))
+    );
+
+    if (work.length === 0) {
+      console.log(`\n[SC] ${year}: no documents in listing`);
+      continue;
+    }
+    console.log(`\n[SC] ${year}: ${work.length} documents`);
+
+    let idx = 0;
+    let downloaded = 0;
+
+    const worker = async () => {
+      while (idx < work.length) {
+        const { symbol, rawUrl } = work[idx++];
+        const parsed = parseScSymbol(symbol);
+        if (!parsed) continue;
+        const { type: docType, sessionId, docId } = parsed;
+
+        if (docAlreadyDownloaded('sc', sessionId, docType, docId, lang)) {
+          process.stdout.write(`[SKIP] ${symbol}\n`);
+          continue;
+        }
+        if (dryRun) {
+          console.log(`[DRY-RUN] Would fetch: ${symbol}`);
+          continue;
+        }
+
+        await throttle(delay);
+        const ok = await downloadUrl(browser, addLangToUrl(rawUrl, lang),
+                                     'sc', docType, lang, sessionId, docId);
+        if (ok) downloaded++;
+      }
+    }
+
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    if (!dryRun) console.log(`[SC] ${year}: ${downloaded} new documents downloaded`);
   }
 }
 
@@ -377,8 +364,7 @@ async function main() {
       if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
       if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession, concurrency, browser, delay);
       if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession, concurrency, browser, delay);
-      if (doSC && doPV)  await fetchSCPV(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
-      if (doSC && doRes) await fetchSCRes(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
+      if (doSC) await fetchSC(type, lang, dryRun, fromSession, toSession, concurrency, browser, delay);
     }
   } finally {
     if (browser) await browser.close();

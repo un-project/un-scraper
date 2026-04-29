@@ -278,6 +278,12 @@ async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body, brows
 // across many downloads; pass null to use a temporary per-call browser.
 export async function downloadDocument(browser, body, type, lang, sessionId, docId) {
   const url = buildUrl(body, type, sessionId, docId, lang);
+  return downloadUrl(browser, url, body, type, lang, sessionId, docId);
+}
+
+// Like downloadDocument but takes a pre-built URL instead of constructing one.
+// Useful when the caller already knows the exact URL (e.g. from a listing API).
+export async function downloadUrl(browser, url, body, type, lang, sessionId, docId) {
   let ok = await scrapeDocument(url, sessionId, docId, type, lang, body, browser);
   if (!ok && !url.endsWith('(OR)')) {
     const orUrl = url + '(OR)';
