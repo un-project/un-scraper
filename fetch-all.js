@@ -20,10 +20,11 @@
  *   --dry-run       Print what would be downloaded without running the scraper
  */
 
-import { spawn } from 'child_process';
+import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { downloadDocument, BROWSER_LAUNCH_OPTS } from './un-scraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -184,23 +185,13 @@ function docAlreadyDownloaded(body, sessionId, type, docId, lang) {
   return fs.readdirSync(dir).some(f => f.startsWith(`document_${docId}.`));
 }
 
-function runScraper(body, type, lang, sessionId, docId, dryRun) {
+async function runScraper(browser, body, type, lang, sessionId, docId, dryRun) {
   const label = `${body.toUpperCase()} ${type.toUpperCase()} session=${sessionId} doc=${docId}`;
   if (dryRun) {
     console.log(`[DRY-RUN] Would fetch: ${label}`);
-    return Promise.resolve(true);
+    return true;
   }
-  return new Promise((resolve) => {
-    const child = spawn('node', [
-      'un-scraper.js',
-      `--body=${body}`,
-      `--type=${type}`,
-      `--lang=${lang}`,
-      `--session-id=${sessionId}`,
-      `--doc-id=${docId}`,
-    ], { cwd: __dirname, stdio: 'inherit' });
-    child.on('close', code => resolve(code === 0));
-  });
+  return downloadDocument(browser, body, type, lang, sessionId, docId);
 }
 
 /**
@@ -209,7 +200,7 @@ function runScraper(body, type, lang, sessionId, docId, dryRun) {
  * failures in a row (evaluated in docId order across workers).
  * Returns the number of documents successfully downloaded.
  */
-async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryRun, concurrency) {
+async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryRun, concurrency, browser) {
   let downloaded = 0;
   // stopAt is reduced when consecutive-fail threshold is reached; workers check it
   // before claiming each new docId (JS is single-threaded so no lock needed).
@@ -253,7 +244,7 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
         continue;
       }
 
-      const ok = await runScraper(body, type, lang, sessionId, docId, dryRun);
+      const ok = await runScraper(browser, body, type, lang, sessionId, docId, dryRun);
       if (ok) downloaded++;
       settled.set(docId, ok);
       processSettled();
@@ -269,16 +260,16 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
 // Legacy GA PV: globally-numbered plenary meetings on undocs.org (A/PV.1–2444).
 // un-scraper.js interprets --session-id=0 as the legacy URL trigger.
 // from/to are interpreted as meeting (doc) numbers.
-async function fetchGAPVLegacy(lang, dryRun, from, to, concurrency) {
+async function fetchGAPVLegacy(lang, dryRun, from, to, concurrency, browser) {
   const startDoc = from ?? 1;
   const endDoc   = to   ?? GA_LEGACY_PV_LAST_DOC;
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`General Assembly — Procès-verbaux legacy (A/PV.${startDoc}–${endDoc}, pre-1976)`);
   console.log('─'.repeat(60));
-  await fetchDocRange('ga', 'pv', lang, 0, startDoc, endDoc, dryRun, concurrency);
+  await fetchDocRange('ga', 'pv', lang, 0, startDoc, endDoc, dryRun, concurrency, browser);
 }
 
-async function fetchGA(type, lang, dryRun, from, to, concurrency) {
+async function fetchGA(type, lang, dryRun, from, to, concurrency, browser) {
   const label = type === 'pv' ? 'Procès-verbaux' : 'Resolutions';
   const maxDoc = type === 'pv' ? GA_MAX_PV_DOC : GA_MAX_RES_DOC;
   // PV: new per-session numbering starts at session 31 (1976–77).
@@ -295,7 +286,7 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency) {
 
   for (let session = firstSession; session <= lastSession; session++) {
     console.log(`\n[GA ${type.toUpperCase()}] Session ${session}`);
-    const n = await fetchDocRange('ga', type, lang, session, 1, maxDoc, dryRun, concurrency);
+    const n = await fetchDocRange('ga', type, lang, session, 1, maxDoc, dryRun, concurrency, browser);
     if (n === 0) {
       emptySessionStreak++;
       if (emptySessionStreak >= 3) {
@@ -308,17 +299,17 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency) {
   }
 }
 
-async function fetchSCPV(lang, dryRun, from, to, concurrency) {
+async function fetchSCPV(lang, dryRun, from, to, concurrency, browser) {
   const startDoc = from ?? SC_PV_FIRST_DOC;
   const endDoc   = to   ?? SC_PV_LAST_DOC;
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`Security Council — Procès-verbaux (meetings ${startDoc}–${endDoc})`);
   console.log('─'.repeat(60));
   // SC PV uses sessionId=1 and a globally incrementing docId.
-  await fetchDocRange('sc', 'pv', lang, 1, startDoc, endDoc, dryRun, concurrency);
+  await fetchDocRange('sc', 'pv', lang, 1, startDoc, endDoc, dryRun, concurrency, browser);
 }
 
-async function fetchSCRes(lang, dryRun, from, to, concurrency) {
+async function fetchSCRes(lang, dryRun, from, to, concurrency, browser) {
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`Security Council — Resolutions`);
   console.log('─'.repeat(60));
@@ -328,7 +319,7 @@ async function fetchSCRes(lang, dryRun, from, to, concurrency) {
     if (from !== null && year < from) continue;
     if (to   !== null && year > to)   continue;
     console.log(`\n[SC RES] Year ${year} (docs ${firstDoc}–${lastDoc})`);
-    await fetchDocRange('sc', 'res', lang, year, firstDoc, lastDoc, dryRun, concurrency);
+    await fetchDocRange('sc', 'res', lang, year, firstDoc, lastDoc, dryRun, concurrency, browser);
   }
 }
 
@@ -351,13 +342,24 @@ async function main() {
   const doPV = type === 'all' || type === 'pv';
   const doRes = type === 'all' || type === 'res';
 
-  for (const lang of langs) {
-    if (langs.length > 1) console.log(`\n${'═'.repeat(60)}\nLanguage: ${lang}\n${'═'.repeat(60)}`);
-    if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession, concurrency);
-    if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession, concurrency);
-    if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession, concurrency);
-    if (doSC && doPV)  await fetchSCPV(lang, dryRun, fromSession, toSession, concurrency);
-    if (doSC && doRes) await fetchSCRes(lang, dryRun, fromSession, toSession, concurrency);
+  // One shared browser for the entire run; pages are opened/closed per document.
+  let browser = null;
+  if (!dryRun) {
+    console.log('Launching browser...');
+    browser = await puppeteer.launch(BROWSER_LAUNCH_OPTS);
+  }
+
+  try {
+    for (const lang of langs) {
+      if (langs.length > 1) console.log(`\n${'═'.repeat(60)}\nLanguage: ${lang}\n${'═'.repeat(60)}`);
+      if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession, concurrency, browser);
+      if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession, concurrency, browser);
+      if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession, concurrency, browser);
+      if (doSC && doPV)  await fetchSCPV(lang, dryRun, fromSession, toSession, concurrency, browser);
+      if (doSC && doRes) await fetchSCRes(lang, dryRun, fromSession, toSession, concurrency, browser);
+    }
+  } finally {
+    if (browser) await browser.close();
   }
 
   console.log('\nAll done.');

@@ -7,7 +7,7 @@ Potential improvements for this repository.
 - [x] **Parallelise downloads** — `fetch-all.js` runs each scraper invocation serially.
   Launching a small pool of concurrent workers (e.g. with `p-limit`) would cut total
   runtime substantially for large batches.
-- [ ] **Reuse browser instance** — `un-scraper.js` launches and closes a full Chromium
+- [x] **Reuse browser instance** — `un-scraper.js` launches and closes a full Chromium
   browser for every single document. Sharing one browser (or a pool of pages) across
   calls from `fetch-all.js` would eliminate the per-document startup overhead.
 - [ ] **Rate limiting / polite delay** — add a configurable delay between requests to avoid

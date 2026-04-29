@@ -3,7 +3,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // GA sessions 1–30 used Roman numeral notation in resolution URLs (e.g. A/RES/103(I))
 const GA_ROMAN_SESSION_CUTOFF = 30;
@@ -18,6 +19,11 @@ function toRoman(n) {
   }
   return result;
 }
+
+export const BROWSER_LAUNCH_OPTS = {
+  headless: 'new',
+  args: ['--no-sandbox', '--disable-setuid-sandbox'],
+};
 
 // Configuration
 const CONFIG = {
@@ -175,45 +181,44 @@ async function downloadFile(url, filename, retryCount = 0) {
   }
 }
 
-// Scrape document
-async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body) {
-  let browser;
-  
+// Scrape document.
+// If `browser` is provided the caller manages its lifecycle; otherwise a temporary
+// browser is launched and closed within this call.
+async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body, browser = null) {
+  const ownBrowser = browser === null;
+  let page;
+
   try {
-    log.info(`Opening browser...`);
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
-    
-    const page = await browser.newPage();
+    if (ownBrowser) {
+      log.info(`Opening browser...`);
+      browser = await puppeteer.launch(BROWSER_LAUNCH_OPTS);
+    }
+
+    page = await browser.newPage();
     await page.setViewport({ width: 1024, height: 768 });
-    
-    // Set user agent
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
-    
+
     const downloadPath = path.join(__dirname, lang, body, String(sessionId), type);
     ensureDir(downloadPath);
-    
+
     log.info(`Navigating to: ${baseUrl}`);
     const response = await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: CONFIG.timeout });
-    
+
     log.debug(`Response status: ${response.status()}`);
-    
+
     // Check if the page itself is a PDF
     const contentType = response.headers()['content-type'] || '';
     if (contentType.includes('pdf')) {
       log.info('Page is a PDF, downloading directly');
       const filename = `document_${docId}.pdf`;
       const filepath = path.join(downloadPath, filename);
-      
+
       const buffer = await response.buffer();
       fs.writeFileSync(filepath, buffer);
       log.success(`Downloaded: ${filepath}`);
-      await browser.close();
       return true;
     }
-    
+
     // Try to find PDF link on page
     const pdfUrl = await page.evaluate(() => {
       // Look for direct PDF links
@@ -221,7 +226,7 @@ async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body) {
       if (links.length > 0) {
         return links[0].href;
       }
-      
+
       // Look for download button or link
       const buttons = document.querySelectorAll('a, button');
       for (let btn of buttons) {
@@ -231,46 +236,55 @@ async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body) {
           return href;
         }
       }
-      
+
       // Look for iframe sources
       const iframes = document.querySelectorAll('iframe');
       if (iframes.length > 0) {
         const src = iframes[0].src;
         if (src) return src;
       }
-      
+
       return null;
     });
-    
+
     if (pdfUrl) {
       log.info(`Found PDF URL on page: ${pdfUrl}`);
-      // Extract filename from URL, removing query parameters first
       const urlWithoutQuery = pdfUrl.split('?')[0];
       let filename = urlWithoutQuery.split('/').pop() || `document_${docId}.pdf`;
-      // Ensure it has .pdf extension
       if (!filename.endsWith('.pdf')) {
         filename = `document_${docId}.pdf`;
       }
       const filepath = path.join(downloadPath, filename);
-      
+
       await downloadFile(pdfUrl, filepath);
-      await browser.close();
       return true;
     }
-    
+
     log.error('Could not find document URL on page');
     log.debug(`Page title: ${await page.title()}`);
     log.debug(`Page URL: ${page.url()}`);
-    
-    await browser.close();
     return false;
   } catch (error) {
     log.error(`Scraping failed: ${error.message}`);
-    if (browser) {
-      await browser.close();
-    }
     return false;
+  } finally {
+    if (page) try { await page.close(); } catch {}
+    if (ownBrowser && browser) try { await browser.close(); } catch {}
   }
+}
+
+// Build URL, scrape, and retry with (OR) suffix on first failure.
+// Accepts an externally-managed browser so the caller can share one instance
+// across many downloads; pass null to use a temporary per-call browser.
+export async function downloadDocument(browser, body, type, lang, sessionId, docId) {
+  const url = buildUrl(body, type, sessionId, docId, lang);
+  let ok = await scrapeDocument(url, sessionId, docId, type, lang, body, browser);
+  if (!ok && !url.endsWith('(OR)')) {
+    const orUrl = url + '(OR)';
+    log.info(`Trying (OR) fallback: ${orUrl}`);
+    ok = await scrapeDocument(orUrl, sessionId, docId, type, lang, body, browser);
+  }
+  return ok;
 }
 
 // Show usage
@@ -313,24 +327,24 @@ Examples:
 // Main function
 async function main() {
   const argv = parseArgs();
-  
+
   if (argv.help) {
     showUsage();
     process.exit(0);
   }
-  
+
   const { body, type, lang, sessionId, docId } = validateArgs(argv);
-  const url = buildUrl(body, type, sessionId, docId, lang);
-  
+
   log.info(`Starting download:`);
   log.info(`  Body: ${CONFIG.bodies[body].name}`);
   log.info(`  Type: ${CONFIG.bodies[body].documentTypes[type].name}`);
   log.info(`  Language: ${CONFIG.languages[lang].name}`);
   log.info(`  Session: ${sessionId}`);
   log.info(`  Document: ${docId}`);
-  
-  const success = await scrapeDocument(url, sessionId, docId, type, lang, body);
-  
+
+  // Pass null so downloadDocument manages its own browser lifecycle.
+  const success = await downloadDocument(null, body, type, lang, sessionId, docId);
+
   if (success) {
     log.success('Download completed!');
     process.exit(0);
@@ -340,7 +354,9 @@ async function main() {
   }
 }
 
-main().catch(error => {
-  log.error(error.message);
-  process.exit(1);
-});
+if (process.argv[1] === __filename) {
+  main().catch(error => {
+    log.error(error.message);
+    process.exit(1);
+  });
+}
