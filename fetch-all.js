@@ -7,7 +7,7 @@
  *
  * Usage:
  *   node fetch-all.js [--lang=en,fr] [--body=ga|sc|all] [--type=pv|res|all]
- *                     [--from-session=N] [--to-session=N]
+ *                     [--from-session=N] [--to-session=N] [--concurrency=N]
  *
  * Options:
  *   --lang          Comma-separated language codes, or 'all' (default: en).
@@ -16,6 +16,7 @@
  *   --type          Limit to pv or res (default: all)
  *   --from-session  Start of the range (GA: session; SC RES: year; SC PV: meeting no.)
  *   --to-session    End of the range (inclusive). Defaults to the built-in ceiling.
+ *   --concurrency   Number of parallel scraper processes (default: 3)
  *   --dry-run       Print what would be downloaded without running the scraper
  */
 
@@ -42,8 +43,8 @@ const GA_NEW_PV_FIRST_SESSION  = 31;
 const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
 
 // SC PV meetings are numbered globally (not per year).
-const SC_PV_FIRST_DOC  = 1000;
-const SC_PV_LAST_DOC   = 3000;
+const SC_PV_FIRST_DOC  = 1086;
+const SC_PV_LAST_DOC   = 1189;
 
 /**
  * Approximate year→[firstRes, lastRes] ranges for SC resolutions.
@@ -139,7 +140,7 @@ const CONSECUTIVE_FAIL_LIMIT = 5;
 
 function parseArgs() {
   const args = { langs: ['en'], body: 'all', type: 'all', dryRun: false,
-                 fromSession: null, toSession: null };
+                 fromSession: null, toSession: null, concurrency: 3 };
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith('--lang=')) {
       const val = arg.split('=')[1];
@@ -149,6 +150,7 @@ function parseArgs() {
     if (arg.startsWith('--type='))         args.type        = arg.split('=')[1];
     if (arg.startsWith('--from-session=')) args.fromSession = parseInt(arg.split('=')[1]);
     if (arg.startsWith('--to-session='))   args.toSession   = parseInt(arg.split('=')[1]);
+    if (arg.startsWith('--concurrency='))  args.concurrency = parseInt(arg.split('=')[1]);
     if (arg === '--dry-run')               args.dryRun      = true;
     if (arg === '--help') {
       console.log(`
@@ -164,6 +166,7 @@ Options:
   --from-session=N     Start of the range (default: built-in floor)
                        GA: session number; SC RES: year; SC PV: meeting number
   --to-session=N       End of the range, inclusive (default: built-in ceiling)
+  --concurrency=N      Parallel scraper processes (default: 3)
   --dry-run            Print planned downloads without running the scraper
   --help               Show this message
 `);
@@ -201,37 +204,63 @@ function runScraper(body, type, lang, sessionId, docId, dryRun) {
 }
 
 /**
- * Iterates docIds [startDoc, maxDoc] for a fixed (body, type, sessionId).
- * Stops early after CONSECUTIVE_FAIL_LIMIT failures in a row.
+ * Iterates docIds [startDoc, maxDoc] for a fixed (body, type, sessionId) using
+ * up to `concurrency` parallel workers. Stops early after CONSECUTIVE_FAIL_LIMIT
+ * failures in a row (evaluated in docId order across workers).
  * Returns the number of documents successfully downloaded.
  */
-async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryRun) {
-  let consecutiveFails = 0;
+async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryRun, concurrency) {
   let downloaded = 0;
+  // stopAt is reduced when consecutive-fail threshold is reached; workers check it
+  // before claiming each new docId (JS is single-threaded so no lock needed).
+  let stopAt = maxDoc;
+  let nextDoc = startDoc;
 
-  for (let docId = startDoc; docId <= maxDoc; docId++) {
-    if (docAlreadyDownloaded(body, sessionId, type, docId, lang)) {
-      process.stdout.write(`[SKIP] ${body.toUpperCase()} ${type.toUpperCase()} session=${sessionId} doc=${docId}\n`);
-      consecutiveFails = 0;
-      continue;
-    }
+  // Track results in docId order so consecutive-fail counting is deterministic.
+  const settled = new Map(); // docId -> boolean (true = ok or skip)
+  let checkFrom = startDoc;
+  let consecutiveFails = 0;
 
-    const ok = await runScraper(body, type, lang, sessionId, docId, dryRun);
-    if (ok) {
-      downloaded++;
-      consecutiveFails = 0;
-    } else {
-      consecutiveFails++;
-      if (consecutiveFails >= CONSECUTIVE_FAIL_LIMIT) {
-        process.stdout.write(
-          `[STOP] ${CONSECUTIVE_FAIL_LIMIT} consecutive failures at doc=${docId} ` +
-          `(session=${sessionId}), moving on\n`
-        );
-        break;
+  function processSettled() {
+    while (settled.has(checkFrom)) {
+      const ok = settled.get(checkFrom);
+      if (ok) {
+        consecutiveFails = 0;
+      } else {
+        consecutiveFails++;
+        if (consecutiveFails >= CONSECUTIVE_FAIL_LIMIT) {
+          process.stdout.write(
+            `[STOP] ${CONSECUTIVE_FAIL_LIMIT} consecutive failures at doc=${checkFrom} ` +
+            `(session=${sessionId}), moving on\n`
+          );
+          stopAt = checkFrom;
+          break;
+        }
       }
+      checkFrom++;
     }
   }
 
+  async function worker() {
+    while (true) {
+      if (nextDoc > stopAt) break;
+      const docId = nextDoc++;
+
+      if (docAlreadyDownloaded(body, sessionId, type, docId, lang)) {
+        process.stdout.write(`[SKIP] ${body.toUpperCase()} ${type.toUpperCase()} session=${sessionId} doc=${docId}\n`);
+        settled.set(docId, true);
+        processSettled();
+        continue;
+      }
+
+      const ok = await runScraper(body, type, lang, sessionId, docId, dryRun);
+      if (ok) downloaded++;
+      settled.set(docId, ok);
+      processSettled();
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, worker));
   return downloaded;
 }
 
@@ -240,16 +269,16 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
 // Legacy GA PV: globally-numbered plenary meetings on undocs.org (A/PV.1–2444).
 // un-scraper.js interprets --session-id=0 as the legacy URL trigger.
 // from/to are interpreted as meeting (doc) numbers.
-async function fetchGAPVLegacy(lang, dryRun, from, to) {
+async function fetchGAPVLegacy(lang, dryRun, from, to, concurrency) {
   const startDoc = from ?? 1;
   const endDoc   = to   ?? GA_LEGACY_PV_LAST_DOC;
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`General Assembly — Procès-verbaux legacy (A/PV.${startDoc}–${endDoc}, pre-1976)`);
   console.log('─'.repeat(60));
-  await fetchDocRange('ga', 'pv', lang, 0, startDoc, endDoc, dryRun);
+  await fetchDocRange('ga', 'pv', lang, 0, startDoc, endDoc, dryRun, concurrency);
 }
 
-async function fetchGA(type, lang, dryRun, from, to) {
+async function fetchGA(type, lang, dryRun, from, to, concurrency) {
   const label = type === 'pv' ? 'Procès-verbaux' : 'Resolutions';
   const maxDoc = type === 'pv' ? GA_MAX_PV_DOC : GA_MAX_RES_DOC;
   // PV: new per-session numbering starts at session 31 (1976–77).
@@ -266,7 +295,7 @@ async function fetchGA(type, lang, dryRun, from, to) {
 
   for (let session = firstSession; session <= lastSession; session++) {
     console.log(`\n[GA ${type.toUpperCase()}] Session ${session}`);
-    const n = await fetchDocRange('ga', type, lang, session, 1, maxDoc, dryRun);
+    const n = await fetchDocRange('ga', type, lang, session, 1, maxDoc, dryRun, concurrency);
     if (n === 0) {
       emptySessionStreak++;
       if (emptySessionStreak >= 3) {
@@ -279,17 +308,17 @@ async function fetchGA(type, lang, dryRun, from, to) {
   }
 }
 
-async function fetchSCPV(lang, dryRun, from, to) {
+async function fetchSCPV(lang, dryRun, from, to, concurrency) {
   const startDoc = from ?? SC_PV_FIRST_DOC;
   const endDoc   = to   ?? SC_PV_LAST_DOC;
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`Security Council — Procès-verbaux (meetings ${startDoc}–${endDoc})`);
   console.log('─'.repeat(60));
   // SC PV uses sessionId=1 and a globally incrementing docId.
-  await fetchDocRange('sc', 'pv', lang, 1, startDoc, endDoc, dryRun);
+  await fetchDocRange('sc', 'pv', lang, 1, startDoc, endDoc, dryRun, concurrency);
 }
 
-async function fetchSCRes(lang, dryRun, from, to) {
+async function fetchSCRes(lang, dryRun, from, to, concurrency) {
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`Security Council — Resolutions`);
   console.log('─'.repeat(60));
@@ -299,22 +328,23 @@ async function fetchSCRes(lang, dryRun, from, to) {
     if (from !== null && year < from) continue;
     if (to   !== null && year > to)   continue;
     console.log(`\n[SC RES] Year ${year} (docs ${firstDoc}–${lastDoc})`);
-    await fetchDocRange('sc', 'res', lang, year, firstDoc, lastDoc, dryRun);
+    await fetchDocRange('sc', 'res', lang, year, firstDoc, lastDoc, dryRun, concurrency);
   }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const { langs, body, type, dryRun, fromSession, toSession } = parseArgs();
+  const { langs, body, type, dryRun, fromSession, toSession, concurrency } = parseArgs();
 
   console.log(`fetch-all.js — UN document batch downloader`);
-  console.log(`Languages: ${langs.join(', ')}`);
-  console.log(`Body     : ${body}`);
-  console.log(`Type     : ${type}`);
-  if (fromSession !== null) console.log(`From     : ${fromSession}`);
-  if (toSession   !== null) console.log(`To       : ${toSession}`);
-  if (dryRun) console.log(`Mode     : DRY RUN`);
+  console.log(`Languages  : ${langs.join(', ')}`);
+  console.log(`Body       : ${body}`);
+  console.log(`Type       : ${type}`);
+  console.log(`Concurrency: ${concurrency}`);
+  if (fromSession !== null) console.log(`From       : ${fromSession}`);
+  if (toSession   !== null) console.log(`To         : ${toSession}`);
+  if (dryRun) console.log(`Mode       : DRY RUN`);
 
   const doGA = body === 'all' || body === 'ga';
   const doSC = body === 'all' || body === 'sc';
@@ -323,11 +353,11 @@ async function main() {
 
   for (const lang of langs) {
     if (langs.length > 1) console.log(`\n${'═'.repeat(60)}\nLanguage: ${lang}\n${'═'.repeat(60)}`);
-    if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession);
-    if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession);
-    if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession);
-    if (doSC && doPV)  await fetchSCPV(lang, dryRun, fromSession, toSession);
-    if (doSC && doRes) await fetchSCRes(lang, dryRun, fromSession, toSession);
+    if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession, concurrency);
+    if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession, concurrency);
+    if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession, concurrency);
+    if (doSC && doPV)  await fetchSCPV(lang, dryRun, fromSession, toSession, concurrency);
+    if (doSC && doRes) await fetchSCRes(lang, dryRun, fromSession, toSession, concurrency);
   }
 
   console.log('\nAll done.');

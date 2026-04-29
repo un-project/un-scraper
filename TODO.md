@@ -4,7 +4,7 @@ Potential improvements for this repository.
 
 ## Performance
 
-- [ ] **Parallelise downloads** — `fetch-all.js` runs each scraper invocation serially.
+- [x] **Parallelise downloads** — `fetch-all.js` runs each scraper invocation serially.
   Launching a small pool of concurrent workers (e.g. with `p-limit`) would cut total
   runtime substantially for large batches.
 - [ ] **Reuse browser instance** — `un-scraper.js` launches and closes a full Chromium
