@@ -10,7 +10,7 @@ Potential improvements for this repository.
 - [x] **Reuse browser instance** — `un-scraper.js` launches and closes a full Chromium
   browser for every single document. Sharing one browser (or a pool of pages) across
   calls from `fetch-all.js` would eliminate the per-document startup overhead.
-- [ ] **Rate limiting / polite delay** — add a configurable delay between requests to avoid
+- [x] **Rate limiting / polite delay** — add a configurable delay between requests to avoid
   hammering the UN servers and triggering throttling.
 
 ## Reliability
