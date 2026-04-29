@@ -46,8 +46,8 @@ const GA_NEW_PV_FIRST_SESSION  = 31;
 const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
 
 // SC PV meetings are numbered globally (not per year).
-const SC_PV_FIRST_DOC  = 1086;
-const SC_PV_LAST_DOC   = 1189;
+const SC_PV_FIRST_DOC  = 1;
+const SC_PV_LAST_DOC   = 10000;
 
 /**
  * Approximate year→[firstRes, lastRes] ranges for SC resolutions.
@@ -55,7 +55,7 @@ const SC_PV_LAST_DOC   = 1189;
  * The upper bound of each year is the lower bound of the next minus 1.
  */
 const SC_RES_YEAR_RANGES = {
-  /*1946: [1,   15],
+  1946: [1,   15],
   1947: [16,  25],
   1948: [26,  35],
   1949: [36,  43],
@@ -116,7 +116,7 @@ const SC_RES_YEAR_RANGES = {
   2004: [1527, 1590],
   2005: [1591, 1660],
   2006: [1661, 1729],
-  2007: [1730, 1790],*/
+  2007: [1730, 1790],
   2008: [1791, 1853],
   2009: [1854, 1906],
   2010: [1907, 1975],
