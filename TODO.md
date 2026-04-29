@@ -19,7 +19,7 @@ Potential improvements for this repository.
   well past that number. Either raise the cap or derive it dynamically.
 - [x] **SC RES year ranges** — the 2024 upper bound is marked "extend if needed" and years
   before 2008 are commented out. Restore or auto-detect the full range.
-- [ ] **GA session cap** — `GA_LAST_SESSION` must be updated manually each year.
+- [x] **GA session cap** — `GA_LAST_SESSION` must be updated manually each year.
   Consider deriving the current session from the current date automatically.
 - [x] **Error logging** — failed documents are only reported to stdout and then forgotten.
   Writing a machine-readable log (e.g. `failed.jsonl`) would make it easy to retry

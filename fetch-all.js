@@ -34,7 +34,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ALL_LANGS = ['ar', 'zh', 'en', 'fr', 'ru', 'es'];
 
-const GA_LAST_SESSION  = 79;   // update as new sessions begin
 const GA_MAX_RES_DOC   = 400;  // max resolution doc number to try per session
 
 // Legacy GA PV: globally sequential plenary meetings 1–2444 (1946–1976).
@@ -44,6 +43,15 @@ const GA_LEGACY_PV_LAST_DOC    = 2444;
 // New per-session GA PV numbering begins at session 31 (1976–77 onwards).
 const GA_NEW_PV_FIRST_SESSION  = 31;
 const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
+
+// GA sessions start each September. Session N begins in year 1945+N, so:
+//   before September → current session = thisYear - 1946
+//   from September   → current session = thisYear - 1945
+// (Date.getMonth() is 0-based, so 8 = September)
+function currentGASession() {
+  const now = new Date();
+  return now.getFullYear() - (now.getMonth() >= 8 ? 1945 : 1946);
+}
 
 // SC: listing API served by the Dag Hammarskjöld Library.
 // Covers 2000–present; returns all PV records and resolutions per calendar year.
@@ -219,7 +227,7 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency, browser, delay
   // RES: sessions 1–30 use Roman numeral URLs (handled by un-scraper.js); start from 1.
   const defaultFirst = type === 'pv' ? GA_NEW_PV_FIRST_SESSION : 1;
   const firstSession = from ?? defaultFirst;
-  const lastSession  = to   ?? GA_LAST_SESSION;
+  const lastSession  = to   ?? currentGASession();
 
   console.log(`\n${'─'.repeat(60)}`);
   console.log(`General Assembly — ${label} (sessions ${firstSession}–${lastSession})`);
