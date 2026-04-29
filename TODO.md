@@ -21,7 +21,7 @@ Potential improvements for this repository.
   before 2008 are commented out. Restore or auto-detect the full range.
 - [ ] **GA session cap** — `GA_LAST_SESSION` must be updated manually each year.
   Consider deriving the current session from the current date automatically.
-- [ ] **Error logging** — failed documents are only reported to stdout and then forgotten.
+- [x] **Error logging** — failed documents are only reported to stdout and then forgotten.
   Writing a machine-readable log (e.g. `failed.jsonl`) would make it easy to retry
   only what failed without re-running the full batch.
 - [ ] **Resume / progress file** — currently `docAlreadyDownloaded` checks the filesystem

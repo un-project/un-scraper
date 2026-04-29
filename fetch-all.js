@@ -26,7 +26,7 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { downloadDocument, downloadUrl, BROWSER_LAUNCH_OPTS } from './un-scraper.js';
+import { downloadDocument, downloadUrl, BROWSER_LAUNCH_OPTS, buildUrl } from './un-scraper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -102,6 +102,9 @@ Options:
 // The first request is never delayed. JS's single-threaded event loop makes the
 // slot reservation (everything before the await) atomic across workers.
 let nextAllowedAt = 0;
+
+// Accumulates failed download records for the failed.jsonl report written at the end.
+const failures = [];
 
 async function throttle(delay) {
   if (delay <= 0) return;
@@ -180,7 +183,12 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
       }
 
       const ok = await runScraper(browser, body, type, lang, sessionId, docId, dryRun, delay);
-      if (ok) downloaded++;
+      if (ok) {
+        downloaded++;
+      } else if (!dryRun) {
+        failures.push({ ts: new Date().toISOString(), lang, body, type, sessionId, docId,
+                        url: buildUrl(body, type, sessionId, docId, lang) });
+      }
       settled.set(docId, ok);
       processSettled();
     }
@@ -322,7 +330,12 @@ async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay
         await throttle(delay);
         const ok = await downloadUrl(browser, addLangToUrl(rawUrl, lang),
                                      'sc', docType, lang, sessionId, docId);
-        if (ok) downloaded++;
+        if (ok) {
+          downloaded++;
+        } else {
+          failures.push({ ts: new Date().toISOString(), lang, body: 'sc', type: docType,
+                          sessionId, docId, url: addLangToUrl(rawUrl, lang) });
+        }
       }
     }
 
@@ -368,6 +381,12 @@ async function main() {
     }
   } finally {
     if (browser) await browser.close();
+  }
+
+  if (!dryRun && failures.length > 0) {
+    const failPath = path.join(__dirname, 'failed.jsonl');
+    fs.writeFileSync(failPath, failures.map(r => JSON.stringify(r)).join('\n') + '\n');
+    console.log(`\n${failures.length} failed download(s) logged to ${failPath}`);
   }
 
   console.log('\nAll done.');

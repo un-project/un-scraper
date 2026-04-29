@@ -124,7 +124,7 @@ function validateArgs(args) {
 }
 
 // Build URL
-function buildUrl(body, type, sessionId, docId, lang) {
+export function buildUrl(body, type, sessionId, docId, lang) {
   // Legacy GA PV: globally-numbered plenary meetings before 1976 (A/PV.1–2444)
   // Signalled by sessionId=0; uses undocs.org and carries no language prefix.
   if (body === 'ga' && type === 'pv' && sessionId === 0) {
