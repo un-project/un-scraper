@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toRoman, buildUrl } from './lib.js';
 import { parseArgs as parseArgsScraper } from './un-scraper.js';
-import { parseArgs, parseScSymbol } from './fetch-all.js';
+import { parseArgs, parseScSymbol, addLangToUrl } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
 
@@ -222,4 +222,38 @@ test('parseScSymbol: SC RES legacy format — space before paren (research.un.or
 test('parseScSymbol: returns null for unknown symbols', () => {
   assert.equal(parseScSymbol('S/INF/2/Rev.1(I)'), null);
   assert.equal(parseScSymbol('S/144'), null);
+});
+
+// ─── addLangToUrl ─────────────────────────────────────────────────────────────
+
+test('addLangToUrl: docs.un.org already language-qualified — unchanged', () => {
+  assert.equal(
+    addLangToUrl('https://docs.un.org/en/S/PV.9800', 'fr'),
+    'https://docs.un.org/en/S/PV.9800'
+  );
+});
+
+test('addLangToUrl: docs.un.org without language — adds language', () => {
+  assert.equal(
+    addLangToUrl('https://docs.un.org/S/PV.9800', 'en'),
+    'https://docs.un.org/en/S/PV.9800'
+  );
+});
+
+test('addLangToUrl: undocs.org with language prefix — ports to docs.un.org', () => {
+  assert.equal(
+    addLangToUrl('https://undocs.org/en/S/PV.9800', 'fr'),
+    'https://docs.un.org/fr/S/PV.9800'
+  );
+});
+
+test('addLangToUrl: undocs.org bare symbol (pre-2000 form) — ports to docs.un.org with lang', () => {
+  assert.equal(
+    addLangToUrl('https://undocs.org/S/PV.88', 'en'),
+    'https://docs.un.org/en/S/PV.88'
+  );
+  assert.equal(
+    addLangToUrl('https://undocs.org/S/PV.88', 'fr'),
+    'https://docs.un.org/fr/S/PV.88'
+  );
 });

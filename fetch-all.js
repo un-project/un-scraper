@@ -328,13 +328,20 @@ export function parseScSymbol(symbol) {
   return null;
 }
 
-// Insert a language code into a docs.un.org or undocs.org URL.
-function addLangToUrl(rawUrl, lang) {
+// Normalise a docs.un.org or undocs.org URL to docs.un.org/{lang}/SYMBOL.
+// Handles all four forms that appear in DHL and research.un.org listings:
+//   https://docs.un.org/en/S/PV.9800   → already correct, return as-is
+//   https://docs.un.org/S/PV.9800      → add language prefix
+//   https://undocs.org/en/S/PV.9800    → port to docs.un.org with lang
+//   https://undocs.org/S/PV.88         → port to docs.un.org with lang (pre-2000 bare form)
+export function addLangToUrl(rawUrl, lang) {
   if (/^https?:\/\/docs\.un\.org\/[a-z]{2}\//.test(rawUrl)) return rawUrl;
   if (rawUrl.startsWith('https://docs.un.org/'))
     return rawUrl.replace('https://docs.un.org/', `https://docs.un.org/${lang}/`);
-  // (www.)undocs.org/en/… → undocs.org/{lang}/…
-  return rawUrl.replace(/^(https?:\/\/(?:www\.)?undocs\.org)\/[a-z]{2}\//, `$1/${lang}/`);
+  // Strip optional language code from undocs.org path, then rewrite to docs.un.org.
+  const m = rawUrl.match(/^https?:\/\/(?:www\.)?undocs\.org(?:\/[a-z]{2})?\/(.*)/);
+  if (m) return `https://docs.un.org/${lang}/${m[1]}`;
+  return rawUrl;
 }
 
 // ─── SC download routine ──────────────────────────────────────────────────────
