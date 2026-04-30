@@ -54,10 +54,12 @@ function currentGASession() {
   return now.getFullYear() - (now.getMonth() >= 8 ? 1945 : 1946);
 }
 
-// SC: listing API served by the Dag Hammarskjöld Library.
-// Covers 2000–present; returns all PV records and resolutions per calendar year.
-const SC_FIRST_YEAR   = 2000;
+// SC: DHL listing API covers 2000–present.
+const SC_FIRST_YEAR   = 1946;
+const SC_DHL_YEAR     = 2000;  // first year covered by the DHL listing API
 const SC_LISTING_BASE = 'https://ydsftksff8.execute-api.us-east-1.amazonaws.com/dev/render_meeting';
+// Pre-2000: Dag Hammarskjöld Library research guide pages (one page per year).
+const SC_LEGACY_LISTING_BASE = 'https://research.un.org/en/docs/sc/quick/meetings';
 
 // Stop after this many consecutive failures within a session/range.
 const CONSECUTIVE_FAIL_LIMIT = 5;
@@ -284,32 +286,44 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency, browser, delay
 
 // ─── SC listing helpers ───────────────────────────────────────────────────────
 
-// Fetch the DHL meeting table for one SC year; return all S/PV and S/RES entries.
-async function fetchScListing(year) {
-  const res = await fetch(`${SC_LISTING_BASE}/scmeetings_${year}/EN`);
-  if (!res.ok) return [];
-  const html = await res.text();
+// Shared regex: matches any undocs.org or docs.un.org anchor whose text is an S/PV or S/RES symbol.
+const SC_SYMBOL_RE = /href="(https?:\/\/(?:(?:www\.)?undocs\.org|docs\.un\.org)[^"]*)"[^>]*>\s*(S\/(?:PV|RES)\S*(?:\s*\([^)]+\))?)\s*<\/a>/g;
 
+function parseScListing(html) {
   const docs = new Map(); // symbol → rawUrl (deduplicate)
-  const re = /href="(https?:\/\/(?:(?:www\.)?undocs\.org|docs\.un\.org)[^"]*)"[^>]*>\s*(S\/(?:PV|RES)\S*(?:\s*\([^)]+\))?)\s*<\/a>/g;
+  SC_SYMBOL_RE.lastIndex = 0;
   let m;
-  while ((m = re.exec(html)) !== null) {
+  while ((m = SC_SYMBOL_RE.exec(html)) !== null) {
     const symbol = m[2].trim();
     if (!docs.has(symbol)) docs.set(symbol, m[1].trim());
   }
   return [...docs.entries()].map(([symbol, rawUrl]) => ({ symbol, rawUrl }));
 }
 
+// Fetch the DHL meeting table for one SC year (2000–present).
+async function fetchScListing(year) {
+  const res = await fetch(`${SC_LISTING_BASE}/scmeetings_${year}/EN`);
+  if (!res.ok) return [];
+  return parseScListing(await res.text());
+}
+
+// Fetch the DHL Library research-guide page for one SC year (1946–1999).
+async function fetchScListingLegacy(year) {
+  const res = await fetch(`${SC_LEGACY_LISTING_BASE}/${year}`);
+  if (!res.ok) return [];
+  return parseScListing(await res.text());
+}
+
 // Parse an SC symbol into { type, sessionId, docId }.  Returns null for unknown types.
-function parseScSymbol(symbol) {
+export function parseScSymbol(symbol) {
   // S/PV.10146  or  S/PV.10146 (Resumption 1)
   const pv = symbol.match(/^S\/PV\.(\d+)(.*)?$/);
   if (pv) {
     const suffix = (pv[2] || '').trim();
     return { type: 'pv', sessionId: 1, docId: suffix ? `${pv[1]}${suffix}` : parseInt(pv[1]) };
   }
-  // S/RES/2811(2025)
-  const res = symbol.match(/^S\/RES\/(\d+)\((\d+)\)$/);
+  // S/RES/2811(2025)  or  S/RES/15 (1946)  — DHL omits the space, research.un.org includes it
+  const res = symbol.match(/^S\/RES\/(\d+)\s*\((\d+)\)$/);
   if (res) return { type: 'res', sessionId: parseInt(res[2]), docId: parseInt(res[1]) };
   return null;
 }
@@ -336,7 +350,9 @@ async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay
   console.log('─'.repeat(60));
 
   for (let year = firstYear; year <= lastYear; year++) {
-    const listing = await fetchScListing(year);
+    const listing = year < SC_DHL_YEAR
+      ? await fetchScListingLegacy(year)
+      : await fetchScListing(year);
     const work = listing.filter(({ symbol }) =>
       (doPV  && symbol.startsWith('S/PV.'))  ||
       (doRes && symbol.startsWith('S/RES/'))

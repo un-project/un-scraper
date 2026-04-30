@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toRoman, buildUrl } from './lib.js';
 import { parseArgs as parseArgsScraper } from './un-scraper.js';
-import { parseArgs } from './fetch-all.js';
+import { parseArgs, parseScSymbol } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
 
@@ -194,4 +194,32 @@ test('parseArgsScraper: string flags remain strings', () => {
   assert.equal(result.body, 'sc');
   assert.equal(result.type, 'res');
   assert.equal(result.lang, 'fr');
+});
+
+// ─── parseScSymbol ────────────────────────────────────────────────────────────
+
+test('parseScSymbol: SC PV (integer docId)', () => {
+  assert.deepEqual(parseScSymbol('S/PV.88'),
+    { type: 'pv', sessionId: 1, docId: 88 });
+});
+
+test('parseScSymbol: SC PV with resumption suffix (string docId)', () => {
+  // The suffix is trimmed before concatenation, so the leading space is dropped.
+  assert.deepEqual(parseScSymbol('S/PV.10146 (Resumption 1)'),
+    { type: 'pv', sessionId: 1, docId: '10146(Resumption 1)' });
+});
+
+test('parseScSymbol: SC RES modern format — no space (DHL)', () => {
+  assert.deepEqual(parseScSymbol('S/RES/2811(2025)'),
+    { type: 'res', sessionId: 2025, docId: 2811 });
+});
+
+test('parseScSymbol: SC RES legacy format — space before paren (research.un.org)', () => {
+  assert.deepEqual(parseScSymbol('S/RES/15 (1946)'),
+    { type: 'res', sessionId: 1946, docId: 15 });
+});
+
+test('parseScSymbol: returns null for unknown symbols', () => {
+  assert.equal(parseScSymbol('S/INF/2/Rev.1(I)'), null);
+  assert.equal(parseScSymbol('S/144'), null);
 });
