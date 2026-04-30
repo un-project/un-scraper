@@ -289,12 +289,12 @@ async function fetchGA(type, lang, dryRun, from, to, concurrency, browser, delay
 // Shared regex: matches any undocs.org or docs.un.org anchor whose text is an S/PV or S/RES symbol.
 const SC_SYMBOL_RE = /href="(https?:\/\/(?:(?:www\.)?undocs\.org|docs\.un\.org)[^"]*)"[^>]*>\s*(S\/(?:PV|RES)\S*(?:\s*\([^)]+\))?)\s*<\/a>/g;
 
-function parseScListing(html) {
+export function parseScListing(html) {
   const docs = new Map(); // symbol → rawUrl (deduplicate)
   SC_SYMBOL_RE.lastIndex = 0;
   let m;
   while ((m = SC_SYMBOL_RE.exec(html)) !== null) {
-    const symbol = m[2].trim();
+    const symbol = m[2].replace(/<[^>]+>/g, '').trim();
     if (!docs.has(symbol)) docs.set(symbol, m[1].trim());
   }
   return [...docs.entries()].map(([symbol, rawUrl]) => ({ symbol, rawUrl }));

@@ -74,40 +74,40 @@ function validateArgs(args) {
     showUsage();
     process.exit(1);
   }
-  
+
   const body = args.body || 'ga';
   const type = args.type || 'pv';
   const lang = args.lang || 'en';
   const sessionId = args['session-id'] ?? 1;
   const docId     = args['doc-id']     ?? 1;
-  
+
   if (!CONFIG.bodies[body]) {
     log.error(`Invalid body: ${body}. Use ga (General Assembly) or sc (Security Council).`);
     process.exit(1);
   }
-  
+
   if (!CONFIG.bodies[body].documentTypes[type]) {
     log.error(`Invalid document type: ${type}. Use 'pv' or 'res'.`);
     process.exit(1);
   }
-  
+
   if (!CONFIG.languages[lang]) {
     log.error(`Invalid language: ${lang}. Use ar, zh, en, fr, ru, or es.`);
     process.exit(1);
   }
-  
+
   // sessionId=0 is the sentinel for legacy GA PV (A/PV.1–2444, pre-1976)
   const minSessionId = (body === 'ga' && type === 'pv') ? 0 : 1;
   if (isNaN(sessionId) || sessionId < minSessionId) {
     log.error(`Invalid session-id: ${sessionId}`);
     process.exit(1);
   }
-  
+
   if (isNaN(docId) || docId < 1) {
     log.error(`Invalid doc-id: ${docId}`);
     process.exit(1);
   }
-  
+
   return { body, type, lang, sessionId, docId };
 }
 
@@ -121,11 +121,11 @@ async function downloadFile(url, filename, retryCount = 0) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
       }
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
-    
+
     const buffer = await response.arrayBuffer();
     fs.writeFileSync(filename, Buffer.from(buffer));
     log.success(`Downloaded: ${filename}`);

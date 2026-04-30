@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toRoman, buildUrl } from './lib.js';
 import { parseArgs as parseArgsScraper } from './un-scraper.js';
-import { parseArgs, parseScSymbol, addLangToUrl } from './fetch-all.js';
+import { parseArgs, parseScSymbol, parseScListing, addLangToUrl } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
 
@@ -207,6 +207,28 @@ test('parseScSymbol: SC PV with resumption suffix (string docId)', () => {
   // The suffix is trimmed before concatenation, so the leading space is dropped.
   assert.deepEqual(parseScSymbol('S/PV.10146 (Resumption 1)'),
     { type: 'pv', sessionId: 1, docId: '10146(Resumption 1)' });
+});
+
+test('parseScSymbol: SC PV with closed suffix — no HTML tags in docId', () => {
+  assert.deepEqual(parseScSymbol('S/PV.785 (closed)'),
+    { type: 'pv', sessionId: 1, docId: '785(closed)' });
+});
+
+// ─── parseScListing ───────────────────────────────────────────────────────────
+
+test('parseScListing: strips inline HTML tags from symbol text', () => {
+  const html = `<a href="https://undocs.org/S/PV.785">S/PV.785<br> (closed)</a>`;
+  const result = parseScListing(html);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].symbol, 'S/PV.785 (closed)');
+});
+
+test('parseScListing: deduplicates symbols', () => {
+  const html = `
+    <a href="https://undocs.org/S/PV.88">S/PV.88</a>
+    <a href="https://undocs.org/S/PV.88">S/PV.88</a>
+  `;
+  assert.equal(parseScListing(html).length, 1);
 });
 
 test('parseScSymbol: SC RES modern format — no space (DHL)', () => {
