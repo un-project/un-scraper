@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toRoman, buildUrl } from './lib.js';
+import { parseArgs as parseArgsScraper } from './un-scraper.js';
 import { parseArgs } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
@@ -161,4 +162,36 @@ test('parseArgs: --concurrency and --delay', () => {
 
 test('parseArgs: --dry-run sets dryRun flag', () => {
   assert.equal(withArgv(['--dry-run'], parseArgs).dryRun, true);
+});
+
+// ─── parseArgs (un-scraper.js) ────────────────────────────────────────────────
+
+function withArgvScraper(args, fn) {
+  const saved = process.argv;
+  process.argv = ['node', 'un-scraper.js', ...args];
+  try { return fn(); } finally { process.argv = saved; }
+}
+
+test('parseArgsScraper: --session-id is returned as an integer', () => {
+  const result = withArgvScraper(['--session-id=68'], parseArgsScraper);
+  assert.equal(result['session-id'], 68);
+  assert.equal(typeof result['session-id'], 'number');
+});
+
+test('parseArgsScraper: --doc-id is returned as an integer', () => {
+  const result = withArgvScraper(['--doc-id=42'], parseArgsScraper);
+  assert.equal(result['doc-id'], 42);
+  assert.equal(typeof result['doc-id'], 'number');
+});
+
+test('parseArgsScraper: session-id=0 is valid (legacy GA PV sentinel)', () => {
+  const result = withArgvScraper(['--session-id=0'], parseArgsScraper);
+  assert.equal(result['session-id'], 0);
+});
+
+test('parseArgsScraper: string flags remain strings', () => {
+  const result = withArgvScraper(['--body=sc', '--type=res', '--lang=fr'], parseArgsScraper);
+  assert.equal(result.body, 'sc');
+  assert.equal(result.type, 'res');
+  assert.equal(result.lang, 'fr');
 });

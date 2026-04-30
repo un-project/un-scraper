@@ -36,7 +36,7 @@ Potential improvements for this repository.
   filesystem I/O, and browser automation in one file. Extracting `buildUrl` and
   `ensureDir` into a shared module would let `fetch-all.js` import them directly
   instead of spawning a child process per document.
-- [ ] **`--session-id` / `--doc-id` passed as strings** — `parseInt` is called in
+- [x] **`--session-id` / `--doc-id` passed as strings** — `parseInt` is called in
   `validateArgs` but the raw string values are still passed to `spawn` in
   `fetch-all.js`; no harm today, but making the types consistent would prevent
   future surprises.

@@ -51,9 +51,9 @@ const log = {
 };
 
 // Parse command-line arguments
-function parseArgs() {
+export function parseArgs() {
   const args = {};
-  
+
   for (let i = 2; i < process.argv.length; i++) {
     const arg = process.argv[i];
     if (arg.startsWith('--')) {
@@ -61,7 +61,10 @@ function parseArgs() {
       args[key] = value || true;
     }
   }
-  
+
+  if (typeof args['session-id'] === 'string') args['session-id'] = parseInt(args['session-id'], 10);
+  if (typeof args['doc-id']      === 'string') args['doc-id']     = parseInt(args['doc-id'],     10);
+
   return args;
 }
 
@@ -75,8 +78,8 @@ function validateArgs(args) {
   const body = args.body || 'ga';
   const type = args.type || 'pv';
   const lang = args.lang || 'en';
-  const sessionId = parseInt(args['session-id'] || '1');
-  const docId = parseInt(args['doc-id'] || '1');
+  const sessionId = args['session-id'] ?? 1;
+  const docId     = args['doc-id']     ?? 1;
   
   if (!CONFIG.bodies[body]) {
     log.error(`Invalid body: ${body}. Use ga (General Assembly) or sc (Security Council).`);
