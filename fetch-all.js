@@ -37,13 +37,8 @@ const ALL_LANGS = ['ar', 'zh', 'en', 'fr', 'ru', 'es'];
 
 const GA_MAX_RES_DOC   = 400;  // max resolution doc number to try per session
 
-// Legacy GA PV: globally sequential plenary meetings 1–2444 (1946–1976).
-// Fetched via undocs.org using --session-id=0 in un-scraper.js.
-const GA_LEGACY_PV_LAST_DOC    = 2444;
-
-// New per-session GA PV numbering begins at session 31 (1976–77 onwards).
-const GA_NEW_PV_FIRST_SESSION  = 31;
-const GA_MAX_PV_DOC            = 200;  // max PV doc number to try per session
+// GA PV: listing pages on the DHL research guide, one page per session.
+const GA_PV_LISTING_BASE = 'https://research.un.org/en/docs/ga/quick/regular';
 
 // GA sessions start each September. Session N begins in year 1945+N, so:
 //   before September → current session = thisYear - 1946
@@ -93,7 +88,7 @@ Options:
   --body=BODY          Limit to 'ga', 'sc', or 'all' (default: all)
   --type=TYPE          Limit to 'pv', 'res', or 'all' (default: all)
   --from-session=N     Start of the range (default: built-in floor)
-                       GA: session number; SC: calendar year (2000–present)
+                       GA: session number (1–present); SC: calendar year (1946–present)
   --to-session=N       End of the range, inclusive (default: built-in ceiling)
   --concurrency=N      Parallel scraper processes (default: 3)
   --delay=MS           Minimum milliseconds between successive requests (default: 0)
@@ -240,38 +235,109 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
   return downloaded;
 }
 
-// ─── Download routines ────────────────────────────────────────────────────────
+// ─── GA PV listing helpers ────────────────────────────────────────────────────
 
-// Legacy GA PV: globally-numbered plenary meetings on undocs.org (A/PV.1–2444).
-// un-scraper.js interprets --session-id=0 as the legacy URL trigger.
-// from/to are interpreted as meeting (doc) numbers.
-async function fetchGAPVLegacy(lang, dryRun, from, to, concurrency, browser, delay) {
-  const startDoc = from ?? 1;
-  const endDoc   = to   ?? GA_LEGACY_PV_LAST_DOC;
-  console.log(`\n${'─'.repeat(60)}`);
-  console.log(`General Assembly — Procès-verbaux legacy (A/PV.${startDoc}–${endDoc}, pre-1976)`);
-  console.log('─'.repeat(60));
-  await fetchDocRange('ga', 'pv', lang, 0, startDoc, endDoc, dryRun, concurrency, browser, delay);
+// Matches undocs.org or docs.un.org anchors whose text is an A/PV or A/N/PV symbol.
+const GA_PV_RE = /href="(https?:\/\/(?:(?:www\.)?undocs\.org|docs\.un\.org)[^"]*\/A(?:\/\d+)?\/PV\.\d+[^"]*)"[^>]*>\s*(A(?:\/\d+)?\/PV\.\d+)/g;
+
+// Extract sessionId and docId from a GA PV URL.
+//   undocs.org/A/PV.48       → { sessionId: 0, docId: 48 }   (legacy global numbering)
+//   undocs.org/A/68/PV.109   → { sessionId: 68, docId: 109 } (modern per-session)
+export function parseGAPVUrl(rawUrl) {
+  const modern = rawUrl.match(/\/A\/(\d+)\/PV\.(\d+)/);
+  if (modern) return { sessionId: parseInt(modern[1]), docId: parseInt(modern[2]) };
+  const legacy = rawUrl.match(/\/A\/PV\.(\d+)/);
+  if (legacy) return { sessionId: 0, docId: parseInt(legacy[1]) };
+  return null;
 }
 
-async function fetchGA(type, lang, dryRun, from, to, concurrency, browser, delay) {
-  const label = type === 'pv' ? 'Procès-verbaux' : 'Resolutions';
-  const maxDoc = type === 'pv' ? GA_MAX_PV_DOC : GA_MAX_RES_DOC;
-  // PV: new per-session numbering starts at session 31 (1976–77).
-  // RES: sessions 1–30 use Roman numeral URLs (handled by un-scraper.js); start from 1.
-  const defaultFirst = type === 'pv' ? GA_NEW_PV_FIRST_SESSION : 1;
-  const firstSession = from ?? defaultFirst;
+export function parseGAPVListing(html) {
+  const docs = new Map(); // symbol → rawUrl (deduplicate)
+  GA_PV_RE.lastIndex = 0;
+  let m;
+  while ((m = GA_PV_RE.exec(html)) !== null) {
+    const symbol = m[2].replace(/<[^>]+>/g, '').trim();
+    const rawUrl = m[1].trim();
+    if (!docs.has(symbol)) docs.set(symbol, rawUrl);
+  }
+  return [...docs.entries()].map(([symbol, rawUrl]) => ({ symbol, rawUrl }));
+}
+
+async function fetchGAPVListing(session) {
+  const res = await fetch(`${GA_PV_LISTING_BASE}/${session}`);
+  if (!res.ok) return [];
+  return parseGAPVListing(await res.text());
+}
+
+// ─── Download routines ────────────────────────────────────────────────────────
+
+async function fetchGAPV(lang, dryRun, from, to, concurrency, browser, delay) {
+  const firstSession = from ?? 1;
   const lastSession  = to   ?? currentGASession();
 
   console.log(`\n${'─'.repeat(60)}`);
-  console.log(`General Assembly — ${label} (sessions ${firstSession}–${lastSession})`);
+  console.log(`General Assembly — Procès-verbaux (sessions ${firstSession}–${lastSession})`);
+  console.log('─'.repeat(60));
+
+  for (let session = firstSession; session <= lastSession; session++) {
+    const listing = await fetchGAPVListing(session);
+    if (listing.length === 0) {
+      console.log(`\n[GA PV] Session ${session}: no documents in listing`);
+      continue;
+    }
+    console.log(`\n[GA PV] Session ${session}: ${listing.length} documents`);
+
+    let idx = 0;
+    let downloaded = 0;
+
+    const worker = async () => {
+      while (idx < listing.length) {
+        const { symbol, rawUrl } = listing[idx++];
+        const parsed = parseGAPVUrl(rawUrl);
+        if (!parsed) continue;
+        const { docId } = parsed;
+        const sessionId = session; // use listing session; parsed.sessionId=0 for legacy A/PV.N
+
+        if (docAlreadyDownloaded('ga', sessionId, 'pv', docId, lang)) {
+          process.stdout.write(`[SKIP] ${symbol}\n`);
+          continue;
+        }
+        if (dryRun) {
+          console.log(`[DRY-RUN] Would fetch: ${symbol}`);
+          continue;
+        }
+
+        await throttle(delay);
+        const ok = await downloadUrl(browser, addLangToUrl(rawUrl, lang),
+                                     'ga', 'pv', lang, sessionId, docId);
+        if (ok) {
+          downloaded++;
+          recordProgress(lang, 'ga', sessionId, 'pv', docId);
+        } else {
+          failures.push({ ts: new Date().toISOString(), lang, body: 'ga', type: 'pv',
+                          sessionId, docId, url: addLangToUrl(rawUrl, lang) });
+        }
+      }
+    };
+
+    await Promise.all(Array.from({ length: concurrency }, worker));
+    if (!dryRun) console.log(`[GA PV] Session ${session}: ${downloaded} new documents downloaded`);
+  }
+}
+
+async function fetchGARes(lang, dryRun, from, to, concurrency, browser, delay) {
+  const firstSession = from ?? 1;
+  const lastSession  = to   ?? currentGASession();
+
+  console.log(`\n${'─'.repeat(60)}`);
+  console.log(`General Assembly — Resolutions (sessions ${firstSession}–${lastSession})`);
   console.log('─'.repeat(60));
 
   let emptySessionStreak = 0;
 
   for (let session = firstSession; session <= lastSession; session++) {
-    console.log(`\n[GA ${type.toUpperCase()}] Session ${session}`);
-    const n = await fetchDocRange('ga', type, lang, session, 1, maxDoc, dryRun, concurrency, browser, delay);
+    console.log(`\n[GA RES] Session ${session}`);
+    const n = await fetchDocRange('ga', 'res', lang, session, 1, GA_MAX_RES_DOC, dryRun, concurrency, browser, delay);
     if (n === 0) {
       emptySessionStreak++;
       if (emptySessionStreak >= 3) {
@@ -441,9 +507,8 @@ async function main() {
   try {
     for (const lang of langs) {
       if (langs.length > 1) console.log(`\n${'═'.repeat(60)}\nLanguage: ${lang}\n${'═'.repeat(60)}`);
-      if (doGA && doPV)  await fetchGAPVLegacy(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
-      if (doGA && doPV)  await fetchGA('pv',  lang, dryRun, fromSession, toSession, concurrency, browser, delay);
-      if (doGA && doRes) await fetchGA('res', lang, dryRun, fromSession, toSession, concurrency, browser, delay);
+      if (doGA && doPV)  await fetchGAPV(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
+      if (doGA && doRes) await fetchGARes(lang, dryRun, fromSession, toSession, concurrency, browser, delay);
       if (doSC) await fetchSC(type, lang, dryRun, fromSession, toSession, concurrency, browser, delay);
     }
   } finally {

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { toRoman, buildUrl } from './lib.js';
 import { parseArgs as parseArgsScraper } from './un-scraper.js';
-import { parseArgs, parseScSymbol, parseScListing, addLangToUrl } from './fetch-all.js';
+import { parseArgs, parseScSymbol, parseScListing, addLangToUrl,
+         parseGAPVUrl, parseGAPVListing } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
 
@@ -278,4 +279,54 @@ test('addLangToUrl: undocs.org bare symbol (pre-2000 form) — ports to docs.un.
     addLangToUrl('https://undocs.org/S/PV.88', 'fr'),
     'https://docs.un.org/fr/S/PV.88'
   );
+});
+
+// ─── parseGAPVUrl ─────────────────────────────────────────────────────────────
+
+test('parseGAPVUrl: legacy A/PV.N → sessionId 0', () => {
+  assert.deepEqual(parseGAPVUrl('https://undocs.org/A/PV.48'),
+    { sessionId: 0, docId: 48 });
+});
+
+test('parseGAPVUrl: modern A/N/PV.N → sessionId = session', () => {
+  assert.deepEqual(parseGAPVUrl('https://undocs.org/A/68/PV.109'),
+    { sessionId: 68, docId: 109 });
+});
+
+test('parseGAPVUrl: docs.un.org form', () => {
+  assert.deepEqual(parseGAPVUrl('https://docs.un.org/en/A/79/PV.5'),
+    { sessionId: 79, docId: 5 });
+});
+
+test('parseGAPVUrl: returns null for non-PV URLs', () => {
+  assert.equal(parseGAPVUrl('https://undocs.org/A/RES/1(I)'), null);
+});
+
+// ─── parseGAPVListing ─────────────────────────────────────────────────────────
+
+test('parseGAPVListing: extracts legacy A/PV links', () => {
+  const html = `
+    <a href="https://undocs.org/A/PV.48">A/PV.48</a>
+    <a href="https://undocs.org/A/PV.67">A/PV.67</a>
+  `;
+  const result = parseGAPVListing(html);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].symbol, 'A/PV.48');
+  assert.equal(result[1].symbol, 'A/PV.67');
+});
+
+test('parseGAPVListing: extracts modern A/N/PV links', () => {
+  const html = `<a href="https://undocs.org/A/68/PV.109">A/68/PV.109</a>`;
+  const result = parseGAPVListing(html);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].symbol, 'A/68/PV.109');
+  assert.equal(result[0].rawUrl, 'https://undocs.org/A/68/PV.109');
+});
+
+test('parseGAPVListing: deduplicates and strips HTML tags', () => {
+  const html = `
+    <a href="https://undocs.org/A/PV.48">A/PV.48</a>
+    <a href="https://undocs.org/A/PV.48">A/PV.48</a>
+  `;
+  assert.equal(parseGAPVListing(html).length, 1);
 });
