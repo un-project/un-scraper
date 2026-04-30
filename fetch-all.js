@@ -379,7 +379,9 @@ async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay
         const { symbol, rawUrl } = work[idx++];
         const parsed = parseScSymbol(symbol);
         if (!parsed) continue;
-        const { type: docType, sessionId, docId } = parsed;
+        const { type: docType, docId } = parsed;
+        // PV symbols carry no year; use the listing year as the session directory.
+        const sessionId = docType === 'pv' ? year : parsed.sessionId;
 
         if (docAlreadyDownloaded('sc', sessionId, docType, docId, lang)) {
           process.stdout.write(`[SKIP] ${symbol}\n`);
