@@ -2,23 +2,10 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { toRoman, buildUrl, ensureDir } from './lib.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// GA sessions 1–30 used Roman numeral notation in resolution URLs (e.g. A/RES/103(I))
-const GA_ROMAN_SESSION_CUTOFF = 30;
-
-// Convert an integer to a Roman numeral string
-export function toRoman(n) {
-  const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
-  const syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
-  let result = '';
-  for (let i = 0; i < vals.length; i++) {
-    while (n >= vals[i]) { result += syms[i]; n -= vals[i]; }
-  }
-  return result;
-}
 
 export const BROWSER_LAUNCH_OPTS = {
   headless: 'new',
@@ -28,20 +15,18 @@ export const BROWSER_LAUNCH_OPTS = {
 // Configuration
 const CONFIG = {
   bodies: {
-    ga: { 
+    ga: {
       name: 'General Assembly',
-      symbol: 'A',
       documentTypes: {
-        pv: { symbol: 'A/PV', name: 'Procès-verbal', urlPattern: 'A/{sessionId}/PV.{docId}' },
-        res: { symbol: 'A/RES', name: 'Resolution', urlPattern: 'A/RES/{sessionId}/{docId}' }
+        pv:  { name: 'Procès-verbal' },
+        res: { name: 'Resolution' },
       }
     },
-    sc: { 
+    sc: {
       name: 'Security Council',
-      symbol: 'S',
       documentTypes: {
-        pv: { symbol: 'S/PV', name: 'Procès-verbal', urlPattern: 'S/PV.{docId}' },
-        res: { symbol: 'S/RES', name: 'Resolution', urlPattern: 'S/RES/{docId}({sessionId})' }
+        pv:  { name: 'Procès-verbal' },
+        res: { name: 'Resolution' },
       }
     }
   },
@@ -123,35 +108,6 @@ function validateArgs(args) {
   return { body, type, lang, sessionId, docId };
 }
 
-// Build URL
-export function buildUrl(body, type, sessionId, docId, lang) {
-  // Legacy GA PV: globally-numbered plenary meetings before 1976 (A/PV.1–2444)
-  // Signalled by sessionId=0; uses undocs.org and carries no language prefix.
-  if (body === 'ga' && type === 'pv' && sessionId === 0) {
-    return `https://undocs.org/A/PV.${docId}`;
-  }
-
-  // Legacy GA resolution: sessions I–XXX used Roman numeral notation (A/RES/103(I))
-  if (body === 'ga' && type === 'res' && sessionId <= GA_ROMAN_SESSION_CUTOFF) {
-    return `https://docs.un.org/${lang}/A/RES/${docId}(${toRoman(sessionId)})`;
-  }
-
-  const bodyConfig = CONFIG.bodies[body];
-  const docConfig = bodyConfig.documentTypes[type];
-  const baseUrl = `https://docs.un.org/${lang}`;
-  const pattern = docConfig.urlPattern
-    .replace('{sessionId}', sessionId)
-    .replace('{docId}', docId);
-  return `${baseUrl}/${pattern}`;
-}
-
-// Create output directory
-function ensureDir(dir) {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-    log.debug(`Created directory: ${dir}`);
-  }
-}
 
 // Download file with retry logic
 async function downloadFile(url, filename, retryCount = 0) {

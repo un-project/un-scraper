@@ -26,7 +26,8 @@ import puppeteer from 'puppeteer';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { downloadDocument, downloadUrl, BROWSER_LAUNCH_OPTS, buildUrl } from './un-scraper.js';
+import { downloadDocument, downloadUrl, BROWSER_LAUNCH_OPTS } from './un-scraper.js';
+import { buildUrl } from './lib.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

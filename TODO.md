@@ -32,7 +32,7 @@ Potential improvements for this repository.
 
 - [x] **Tests** — `package.json` has `"test": "echo Error: no test specified"`. Add at
   least unit tests for `buildUrl`, `toRoman`, and `parseArgs` (no network required).
-- [ ] **Split responsibilities** — `un-scraper.js` mixes CLI parsing, URL construction,
+- [x] **Split responsibilities** — `un-scraper.js` mixes CLI parsing, URL construction,
   filesystem I/O, and browser automation in one file. Extracting `buildUrl` and
   `ensureDir` into a shared module would let `fetch-all.js` import them directly
   instead of spawning a child process per document.

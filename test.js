@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toRoman, buildUrl } from './un-scraper.js';
+import { toRoman, buildUrl } from './lib.js';
 import { parseArgs } from './fetch-all.js';
 
 // ─── toRoman ──────────────────────────────────────────────────────────────────
