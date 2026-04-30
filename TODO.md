@@ -30,7 +30,7 @@ Potential improvements for this repository.
 
 ## Code quality
 
-- [ ] **Tests** — `package.json` has `"test": "echo Error: no test specified"`. Add at
+- [x] **Tests** — `package.json` has `"test": "echo Error: no test specified"`. Add at
   least unit tests for `buildUrl`, `toRoman`, and `parseArgs` (no network required).
 - [ ] **Split responsibilities** — `un-scraper.js` mixes CLI parsing, URL construction,
   filesystem I/O, and browser automation in one file. Extracting `buildUrl` and

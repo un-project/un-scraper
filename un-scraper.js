@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 const GA_ROMAN_SESSION_CUTOFF = 30;
 
 // Convert an integer to a Roman numeral string
-function toRoman(n) {
+export function toRoman(n) {
   const vals = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
   const syms = ['M', 'CM', 'D', 'CD', 'C', 'XC', 'L', 'XL', 'X', 'IX', 'V', 'IV', 'I'];
   let result = '';

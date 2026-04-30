@@ -63,7 +63,7 @@ const CONSECUTIVE_FAIL_LIMIT = 5;
 
 // ─── Argument parsing ─────────────────────────────────────────────────────────
 
-function parseArgs() {
+export function parseArgs() {
   const args = { langs: ['en'], body: 'all', type: 'all', dryRun: false,
                  fromSession: null, toSession: null, concurrency: 3, delay: 0 };
   for (const arg of process.argv.slice(2)) {
@@ -433,7 +433,9 @@ async function main() {
   console.log('\nAll done.');
 }
 
-main().catch(err => {
-  console.error(`[FATAL] ${err.message}`);
-  process.exit(1);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main().catch(err => {
+    console.error(`[FATAL] ${err.message}`);
+    process.exit(1);
+  });
+}
