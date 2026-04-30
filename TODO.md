@@ -40,7 +40,7 @@ Potential improvements for this repository.
   `validateArgs` but the raw string values are still passed to `spawn` in
   `fetch-all.js`; no harm today, but making the types consistent would prevent
   future surprises.
-- [ ] **`response.buffer()` deprecation** — Puppeteer ≥ 21 removed `Response.buffer()`;
+- [x] **`response.buffer()` deprecation** — Puppeteer ≥ 21 removed `Response.buffer()`;
   the call at line 211 of `un-scraper.js` should use `response.bytes()` instead.
 
 ## Features

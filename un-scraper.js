@@ -172,7 +172,7 @@ async function scrapeDocument(baseUrl, sessionId, docId, type, lang, body, brows
       const filename = `document_${docId}.pdf`;
       const filepath = path.join(downloadPath, filename);
 
-      const buffer = await response.buffer();
+      const buffer = Buffer.from(await response.bytes());
       fs.writeFileSync(filepath, buffer);
       log.success(`Downloaded: ${filepath}`);
       return true;
