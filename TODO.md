@@ -24,7 +24,7 @@ Potential improvements for this repository.
 - [x] **Error logging** — failed documents are only reported to stdout and then forgotten.
   Writing a machine-readable log (e.g. `failed.jsonl`) would make it easy to retry
   only what failed without re-running the full batch.
-- [ ] **Resume / progress file** — currently `docAlreadyDownloaded` checks the filesystem
+- [x] **Resume / progress file** — currently `docAlreadyDownloaded` checks the filesystem
   on every iteration. A lightweight progress file would be faster and would also
   survive accidental deletion of partial output.
 

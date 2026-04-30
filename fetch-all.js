@@ -103,6 +103,34 @@ Options:
   return args;
 }
 
+// ─── Progress tracking ────────────────────────────────────────────────────────
+
+const PROGRESS_FILE = path.join(__dirname, 'progress.txt');
+
+// In-memory set of completed download keys ("lang/body/sessionId/type/docId").
+// Populated at startup from progress.txt, then updated incrementally.
+const progress = new Set();
+
+function progressKey(lang, body, sessionId, type, docId) {
+  return `${lang}/${body}/${sessionId}/${type}/${docId}`;
+}
+
+function loadProgress() {
+  if (!fs.existsSync(PROGRESS_FILE)) return;
+  const lines = fs.readFileSync(PROGRESS_FILE, 'utf8').split('\n');
+  for (const line of lines) {
+    const key = line.trim();
+    if (key) progress.add(key);
+  }
+  if (progress.size > 0) console.log(`Resumed: ${progress.size} completed downloads loaded from progress file.`);
+}
+
+function recordProgress(lang, body, sessionId, type, docId) {
+  const key = progressKey(lang, body, sessionId, type, docId);
+  progress.add(key);
+  fs.appendFileSync(PROGRESS_FILE, key + '\n');
+}
+
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 
 // Tracks when the next request is allowed. Requests reserve slots in call order
@@ -125,6 +153,8 @@ async function throttle(delay) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function docAlreadyDownloaded(body, sessionId, type, docId, lang) {
+  if (progress.has(progressKey(lang, body, sessionId, type, docId))) return true;
+  // Fallback for downloads completed before progress tracking was introduced.
   const dir = path.join(__dirname, lang, body, String(sessionId), type);
   if (!fs.existsSync(dir)) return false;
   return fs.readdirSync(dir).some(f => f.startsWith(`document_${docId}.`));
@@ -193,6 +223,7 @@ async function fetchDocRange(body, type, lang, sessionId, startDoc, maxDoc, dryR
       const ok = await runScraper(browser, body, type, lang, sessionId, docId, dryRun, delay);
       if (ok) {
         downloaded++;
+        if (!dryRun) recordProgress(lang, body, sessionId, type, docId);
       } else if (!dryRun) {
         failures.push({ ts: new Date().toISOString(), lang, body, type, sessionId, docId,
                         url: buildUrl(body, type, sessionId, docId, lang) });
@@ -340,6 +371,7 @@ async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay
                                      'sc', docType, lang, sessionId, docId);
         if (ok) {
           downloaded++;
+          recordProgress(lang, 'sc', sessionId, docType, docId);
         } else {
           failures.push({ ts: new Date().toISOString(), lang, body: 'sc', type: docType,
                           sessionId, docId, url: addLangToUrl(rawUrl, lang) });
@@ -357,6 +389,7 @@ async function fetchSC(type, lang, dryRun, from, to, concurrency, browser, delay
 async function main() {
   const { langs, body, type, dryRun, fromSession, toSession, concurrency, delay } = parseArgs();
 
+  loadProgress();
   console.log(`fetch-all.js — UN document batch downloader`);
   console.log(`Languages  : ${langs.join(', ')}`);
   console.log(`Body       : ${body}`);
